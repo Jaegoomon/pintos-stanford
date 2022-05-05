@@ -5,7 +5,8 @@ WORKDIR /root
 RUN apt update
 RUN apt-get install -y build-essential \ 
                         software-properties-common \
-                        wget
+                        wget \
+                        gdb
 # Install compiler
 RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test
 RUN apt install -y gcc-4.4 g++-4.4
