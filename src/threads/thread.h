@@ -102,6 +102,7 @@ struct thread
     unsigned magic; /* Detects stack overflow. */
 
     int64_t wakeup_tick;
+    int origin_priority;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -140,6 +141,8 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+struct list *get_ready_list(void);
 
 bool late(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
 bool less_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);

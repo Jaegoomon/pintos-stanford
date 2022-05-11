@@ -493,6 +493,7 @@ init_thread(struct thread *t, const char *name, int priority)
     list_push_back(&all_list, &t->allelem);
 
     t->wakeup_tick = NULL;
+    t->origin_priority = -1;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -607,6 +608,11 @@ allocate_tid(void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
+
+struct list *get_ready_list(void)
+{
+    return &ready_list;
+}
 
 struct list *get_sleep_list()
 {
