@@ -100,6 +100,8 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic; /* Detects stack overflow. */
+
+    int64_t wakeup_tick;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -117,6 +119,7 @@ typedef void thread_func(void *aux);
 tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
 void thread_block(void);
+void thread_block_without_intr(void);
 void thread_unblock(struct thread *);
 
 struct thread *thread_current(void);
@@ -137,5 +140,8 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+bool late(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+struct thread *get_idle(void);
 
 #endif /* threads/thread.h */
