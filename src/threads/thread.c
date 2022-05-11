@@ -208,6 +208,12 @@ tid_t thread_create(const char *name, int priority,
     /* Add to run queue. */
     thread_unblock(t);
 
+    // Check if current thread is no longer highest priority.
+    if (priority > thread_get_priority())
+    {
+        thread_yield();
+    }
+
     return tid;
 }
 
@@ -252,7 +258,7 @@ void thread_unblock(struct thread *t)
 
     old_level = intr_disable();
     ASSERT(t->status == THREAD_BLOCKED);
-    list_push_back(&ready_list, &t->elem);
+    list_insert_ordered(&ready_list, &t->elem, less_priority, NULL);
     t->status = THREAD_READY;
     intr_set_level(old_level);
 }
@@ -320,7 +326,7 @@ void thread_yield(void)
 
     old_level = intr_disable();
     if (cur != idle_thread)
-        list_push_back(&ready_list, &cur->elem);
+        list_insert_ordered(&ready_list, &cur->elem, less_priority, NULL);
     cur->status = THREAD_READY;
     schedule();
     intr_set_level(old_level);
@@ -346,6 +352,20 @@ void thread_foreach(thread_action_func *func, void *aux)
 void thread_set_priority(int new_priority)
 {
     thread_current()->priority = new_priority;
+
+    if (list_empty(&ready_list))
+    {
+        return;
+    }
+
+    struct list_elem *e = list_back(&ready_list);
+    struct thread *t = list_entry(e, struct thread, elem);
+
+    // Check if current thread is no longer highest priority.
+    if (t->priority > new_priority)
+    {
+        thread_yield();
+    }
 }
 
 /* Returns the current thread's priority. */
@@ -499,7 +519,7 @@ next_thread_to_run(void)
     if (list_empty(&ready_list))
         return idle_thread;
     else
-        return list_entry(list_pop_front(&ready_list), struct thread, elem);
+        return list_entry(list_pop_back(&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -599,6 +619,16 @@ bool late(struct list_elem *a, struct list_elem *b, void *aux UNUSED)
     struct thread *t_b = list_entry(b, struct thread, elem);
 
     if (t_a->wakeup_tick <= t_b->wakeup_tick)
+        return true;
+    return false;
+}
+
+bool less_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED)
+{
+    struct thread *t_a = list_entry(a, struct thread, elem);
+    struct thread *t_b = list_entry(b, struct thread, elem);
+
+    if (t_a->priority <= t_b->priority)
         return true;
     return false;
 }

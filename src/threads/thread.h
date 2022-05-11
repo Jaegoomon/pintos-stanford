@@ -142,6 +142,7 @@ int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 
 bool late(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+bool less_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
 struct thread *get_idle(void);
 
 #endif /* threads/thread.h */
