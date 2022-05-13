@@ -103,6 +103,7 @@ struct thread
 
     int64_t wakeup_tick;
     int origin_priority;
+    struct list lock_list;
 };
 
 /* If false (default), use round-robin scheduler.

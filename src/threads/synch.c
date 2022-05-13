@@ -175,6 +175,8 @@ void lock_init(struct lock *lock)
 
     lock->holder = NULL;
     sema_init(&lock->semaphore, 1);
+    lock->donated_priority = -1;
+    lock->is_donated = false;
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -191,20 +193,25 @@ void lock_acquire(struct lock *lock)
     ASSERT(!intr_context());
     ASSERT(!lock_held_by_current_thread(lock));
 
+    struct thread *t = thread_current();
     bool success = sema_try_down(&lock->semaphore);
 
     if (!success)
     {
         // Compare priority with lock owner.
-        int priority = thread_get_priority();
+        int priority = t->priority;
         if (priority > lock->holder->priority)
         {
             donate(lock->holder, priority);
-            sema_down(&lock->semaphore);
+            lock->donated_priority = priority;
+            lock->is_donated = true;
+            list_sort(&t->lock_list, less_donated_priority, NULL);
         }
+        sema_down(&lock->semaphore);
     }
 
-    lock->holder = thread_current();
+    list_insert_ordered(&t->lock_list, &lock->elem, less_donated_priority, NULL);
+    lock->holder = t;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -239,24 +246,29 @@ void lock_release(struct lock *lock)
     struct thread *t_holder = lock->holder;
     lock->holder = NULL;
     sema_up(&lock->semaphore);
+    list_remove(&lock->elem);
 
     // Reset priority donation.
+
     int origin_priority = -1;
     int priority = t_holder->origin_priority;
 
-    if (priority != -1)
+    if (lock->is_donated)
     {
-        if (!list_empty(&lock->semaphore.waiters))
+        if (!list_empty(&t_holder->lock_list))
         {
-            struct list_elem *e_waiter = list_back(&lock->semaphore.waiters);
-            struct thread *t_waiter = list_entry(e_waiter, struct thread, elem);
+            struct list_elem *e_last = list_back(&t_holder->lock_list);
+            int max_donated_priority = list_entry(e_last, struct lock, elem)->donated_priority;
 
-            if (origin_priority < t_waiter->priority)
+            if (max_donated_priority > t_holder->origin_priority)
             {
-                origin_priority = priority;
-                priority = t_waiter->priority;
+                origin_priority = t_holder->origin_priority;
+                priority = max_donated_priority;
             }
         }
+
+        lock->is_donated = false;
+        lock->donated_priority = -1;
         t_holder->origin_priority = origin_priority;
         t_holder->priority = priority;
     }
@@ -376,4 +388,14 @@ static void donate(struct thread *t, int priority)
         t->origin_priority = t->priority;
     }
     t->priority = priority;
+}
+
+bool less_donated_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED)
+{
+    struct lock *l_a = list_entry(a, struct lock, elem);
+    struct lock *l_b = list_entry(b, struct lock, elem);
+
+    if (l_a->donated_priority <= l_b->donated_priority)
+        return true;
+    return false;
 }

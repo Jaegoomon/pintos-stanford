@@ -1,6 +1,7 @@
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
 
+#include <debug.h>
 #include <list.h>
 #include <stdbool.h>
 
@@ -22,6 +23,10 @@ struct lock
 {
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
+
+    struct list_elem elem;
+    int donated_priority;
+    bool is_donated;
 };
 
 void lock_init(struct lock *);
@@ -40,6 +45,8 @@ void cond_init(struct condition *);
 void cond_wait(struct condition *, struct lock *);
 void cond_signal(struct condition *, struct lock *);
 void cond_broadcast(struct condition *, struct lock *);
+
+bool less_donated_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
 
 /* Optimization barrier.
 
