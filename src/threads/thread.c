@@ -211,9 +211,7 @@ tid_t thread_create(const char *name, int priority,
 
     // Check if current thread is no longer highest priority.
     if (priority > thread_get_priority())
-    {
         thread_yield();
-    }
 
     return tid;
 }
@@ -333,6 +331,19 @@ void thread_yield(void)
     intr_set_level(old_level);
 }
 
+void thread_priority_yield(void)
+{
+    if (list_empty(&ready_list))
+        return;
+
+    struct list_elem *e = list_back(&ready_list);
+    struct thread *t = list_entry(e, struct thread, elem);
+
+    // Check if current thread is no longer highest priority.
+    if (t->priority > thread_get_priority())
+        thread_yield();
+}
+
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void thread_foreach(thread_action_func *func, void *aux)
@@ -354,19 +365,7 @@ void thread_set_priority(int new_priority)
 {
     thread_current()->priority = new_priority;
 
-    if (list_empty(&ready_list))
-    {
-        return;
-    }
-
-    struct list_elem *e = list_back(&ready_list);
-    struct thread *t = list_entry(e, struct thread, elem);
-
-    // Check if current thread is no longer highest priority.
-    if (t->priority > new_priority)
-    {
-        thread_yield();
-    }
+    thread_priority_yield();
 }
 
 /* Returns the current thread's priority. */

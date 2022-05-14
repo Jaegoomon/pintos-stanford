@@ -194,12 +194,12 @@ void lock_acquire(struct lock *lock)
     ASSERT(!lock_held_by_current_thread(lock));
 
     struct thread *t = thread_current();
-    bool success = sema_try_down(&lock->semaphore);
 
-    if (!success)
+    if (!sema_try_down(&lock->semaphore))
     {
         // Compare priority with lock owner.
         int priority = t->priority;
+
         if (priority > lock->holder->priority)
         {
             donate(lock->holder, priority);
@@ -249,7 +249,6 @@ void lock_release(struct lock *lock)
     list_remove(&lock->elem);
 
     // Reset priority donation.
-
     int origin_priority = -1;
     int priority = t_holder->origin_priority;
 
@@ -274,13 +273,7 @@ void lock_release(struct lock *lock)
     }
 
     // Schedule.
-    if (list_empty(get_ready_list()))
-        return;
-
-    struct list_elem *e = list_back(get_ready_list());
-    struct thread *t = list_entry(e, struct thread, elem);
-    if (t->priority > t_holder->priority)
-        thread_yield();
+    thread_priority_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false
