@@ -47,6 +47,7 @@ void cond_signal(struct condition *, struct lock *);
 void cond_broadcast(struct condition *, struct lock *);
 
 bool less_donated_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
+bool less_cond_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED);
 
 /* Optimization barrier.
 
