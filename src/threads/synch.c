@@ -32,7 +32,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-static void donate(struct thread *t, int priority);
+static void donate(struct lock *lock, int priority);
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -66,11 +66,13 @@ void sema_down(struct semaphore *sema)
     ASSERT(!intr_context());
 
     old_level = intr_disable();
+
     while (sema->value == 0)
     {
         list_insert_ordered(&sema->waiters, &thread_current()->elem, less_priority, NULL);
         thread_block();
     }
+
     sema->value--;
     intr_set_level(old_level);
 }
@@ -111,11 +113,17 @@ void sema_up(struct semaphore *sema)
     ASSERT(sema != NULL);
 
     old_level = intr_disable();
+
     if (!list_empty(&sema->waiters))
-        thread_unblock(list_entry(list_pop_back(&sema->waiters),
-                                  struct thread, elem));
+    {
+        list_sort(&sema->waiters, less_priority, NULL);
+        thread_unblock(list_entry(list_pop_back(&sema->waiters), struct thread, elem));
+    }
+
     sema->value++;
     intr_set_level(old_level);
+
+    thread_priority_yield();
 }
 
 static void sema_test_helper(void *sema_);
@@ -202,16 +210,17 @@ void lock_acquire(struct lock *lock)
 
         if (priority > lock->holder->priority)
         {
-            donate(lock->holder, priority);
-            lock->donated_priority = priority;
-            lock->is_donated = true;
+            donate(lock, priority);
             list_sort(&t->lock_list, less_donated_priority, NULL);
         }
+
+        t->blocker = lock;
         sema_down(&lock->semaphore);
     }
 
     list_insert_ordered(&t->lock_list, &lock->elem, less_donated_priority, NULL);
     lock->holder = t;
+    t->blocker = NULL;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -245,7 +254,6 @@ void lock_release(struct lock *lock)
 
     struct thread *t_holder = lock->holder;
     lock->holder = NULL;
-    sema_up(&lock->semaphore);
     list_remove(&lock->elem);
 
     // Reset priority donation.
@@ -273,7 +281,7 @@ void lock_release(struct lock *lock)
     }
 
     // Schedule.
-    thread_priority_yield();
+    sema_up(&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -374,13 +382,21 @@ void cond_broadcast(struct condition *cond, struct lock *lock)
         cond_signal(cond, lock);
 }
 
-static void donate(struct thread *t, int priority)
+static void donate(struct lock *lock, int priority)
 {
-    if (t->origin_priority == -1)
+    if (lock->holder->origin_priority == -1)
+        lock->holder->origin_priority = lock->holder->priority;
+
+    lock->holder->priority = priority;
+    lock->donated_priority = priority;
+    lock->is_donated = true;
+
+    // Nested donation is needed.
+    if (lock->holder->blocker != NULL)
     {
-        t->origin_priority = t->priority;
+        if (lock->holder->status == THREAD_BLOCKED)
+            donate(lock->holder->blocker, priority);
     }
-    t->priority = priority;
 }
 
 bool less_donated_priority(struct list_elem *a, struct list_elem *b, void *aux UNUSED)

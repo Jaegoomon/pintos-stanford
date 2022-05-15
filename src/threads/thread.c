@@ -363,7 +363,10 @@ void thread_foreach(thread_action_func *func, void *aux)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority)
 {
-    thread_current()->priority = new_priority;
+    if (thread_current()->origin_priority != -1)
+        thread_current()->origin_priority = new_priority;
+    else
+        thread_current()->priority = new_priority;
 
     thread_priority_yield();
 }
@@ -494,6 +497,7 @@ init_thread(struct thread *t, const char *name, int priority)
 
     t->wakeup_tick = NULL;
     t->origin_priority = -1;
+    t->blocker = NULL;
 
     list_init(&t->lock_list);
 }
