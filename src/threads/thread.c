@@ -62,12 +62,15 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+/* MLFQS scheduling */
+static fixed_point load_avg;
+
 static void kernel_thread(thread_func *, void *aux);
 
 static void idle(void *aux UNUSED);
 static struct thread *running_thread(void);
 static struct thread *next_thread_to_run(void);
-static void init_thread(struct thread *, const char *name, int priority);
+static void init_thread(struct thread *, const char *name, int priority, struct thread *parent);
 static bool is_thread(struct thread *) UNUSED;
 static void *alloc_frame(struct thread *, size_t size);
 static void schedule(void);
@@ -97,9 +100,11 @@ void thread_init(void)
 
     list_init(&sleep_list);
 
+    load_avg = 0;
+
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread();
-    init_thread(initial_thread, "main", PRI_DEFAULT);
+    init_thread(initial_thread, "main", PRI_DEFAULT, NULL);
     initial_thread->status = THREAD_RUNNING;
     initial_thread->tid = allocate_tid();
 }
@@ -181,7 +186,7 @@ tid_t thread_create(const char *name, int priority,
         return TID_ERROR;
 
     /* Initialize thread. */
-    init_thread(t, name, priority);
+    init_thread(t, name, priority, thread_current());
     tid = t->tid = allocate_tid();
 
     /* Prepare thread for first run by initializing its stack.
@@ -377,31 +382,63 @@ int thread_get_priority(void)
     return thread_current()->priority;
 }
 
-/* Sets the current thread's nice value to NICE. */
-void thread_set_nice(int nice UNUSED)
+void realloc_priority(struct thread *t, void *aux UNUSED)
 {
-    /* Not yet implemented. */
+    int new_priority = PRI_MAX - fixed2int(x_div_n(t->recent_cpu, 4)) - (t->nice * 2);
+    t->priority = new_priority;
+}
+
+/* Sets the current thread's nice value to NICE. */
+void thread_set_nice(int new_nice)
+{
+    struct thread *t = thread_current();
+
+    t->nice = new_nice;
+    realloc_priority(t, NULL);
+
+    thread_priority_yield();
 }
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
-    /* Not yet implemented. */
-    return 0;
+    return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-    /* Not yet implemented. */
-    return 0;
+    return fixed2int(x_mul_n(load_avg, 100));
+}
+
+void update_load_avg(void)
+{
+    int ready_threads = thread_current() == idle_thread ? list_size(&ready_list) : list_size(&ready_list) + 1;
+    fixed_point left = x_mul_y(x_div_n(int2fixed(59), 60), load_avg);
+    fixed_point right = x_mul_n(x_div_n(int2fixed(1), 60), ready_threads);
+
+    load_avg = x_add_y(left, right);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-    /* Not yet implemented. */
-    return 0;
+    return fixed2int(x_mul_n(thread_current()->recent_cpu, 100));
+}
+
+void update_recent_cpu(void)
+{
+    if (thread_current() != idle_thread)
+        thread_current()->recent_cpu = x_add_n(thread_current()->recent_cpu, 1);
+}
+
+void realloc_recent_cpu(struct thread *t, void *aux UNUSED)
+{
+    fixed_point tmp = x_mul_n(load_avg, 2);
+    fixed_point left = x_mul_y(x_div_y(tmp, x_add_n(tmp, 1)), t->recent_cpu);
+    int right = t->nice;
+
+    t->recent_cpu = x_add_n(left, right);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -481,7 +518,7 @@ is_thread(struct thread *t)
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
-init_thread(struct thread *t, const char *name, int priority)
+init_thread(struct thread *t, const char *name, int priority, struct thread *parent)
 {
     ASSERT(t != NULL);
     ASSERT(PRI_MIN <= priority && priority <= PRI_MAX);
@@ -498,6 +535,17 @@ init_thread(struct thread *t, const char *name, int priority)
     t->wakeup_tick = NULL;
     t->origin_priority = -1;
     t->blocker = NULL;
+
+    if (parent == NULL)
+    {
+        t->nice = 0;
+        t->recent_cpu = 0;
+    }
+    else
+    {
+        t->nice = parent->nice;
+        t->recent_cpu = parent->recent_cpu;
+    }
 
     list_init(&t->lock_list);
 }

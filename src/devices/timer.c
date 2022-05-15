@@ -176,6 +176,21 @@ static void
 timer_interrupt(struct intr_frame *args UNUSED)
 {
     ticks++;
+    thread_tick();
+
+    if (thread_mlfqs)
+    {
+        update_recent_cpu();
+
+        if (timer_ticks() % TIMER_FREQ == 0)
+        {
+            update_load_avg();
+            thread_foreach(realloc_recent_cpu, NULL);
+        }
+
+        if (timer_ticks() % 4 == 0)
+            thread_foreach(realloc_priority, NULL);
+    }
 
     struct list *sleep_list = get_sleep_list();
     struct list_elem *e = list_begin(sleep_list);
@@ -191,10 +206,9 @@ timer_interrupt(struct intr_frame *args UNUSED)
         }
         else
             break;
+
         e = next;
     }
-
-    thread_tick();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
