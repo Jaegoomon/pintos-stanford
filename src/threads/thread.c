@@ -548,6 +548,16 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     }
 
     list_init(&t->lock_list);
+#ifdef USERPROG
+    t->parent = parent;
+    list_init(&t->child_list);
+    sema_init(&t->semaphore, 0);
+
+    if (parent != NULL)
+    {
+        list_push_back(&parent->child_list, &t->child_elem);
+    }
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

@@ -19,8 +19,6 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 
-static int wait;
-
 struct arg
 {
     uint32_t len;
@@ -78,7 +76,7 @@ start_process(void *file_name_)
     if (!success)
         thread_exit(-1);
 
-    hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+    // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
        threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -103,10 +101,10 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
-    wait = 0;
-    while (wait == 0)
-        ;
-    return -1;
+    struct thread *cur = thread_current();
+    sema_down(&cur->semaphore);
+
+    return &cur->semaphore.status;
 }
 
 /* Free the current process's resources. */
@@ -133,7 +131,12 @@ void process_exit(int status)
     }
 
     printf("%s: exit(%d)\n", cur->name, status);
-    wait = 1;
+
+    if (cur->parent != NULL)
+    {
+        cur->parent->semaphore.status = status;
+        sema_up(&cur->parent->semaphore);
+    }
 }
 
 /* Sets up the CPU for running user code in the current
