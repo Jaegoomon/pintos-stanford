@@ -17,9 +17,21 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+
+static int wait;
+
+struct arg
+{
+    uint32_t len;
+    uint32_t stack_address;
+    char *token;
+};
 
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
+static char *get_first_token(const char *file_name);
+static void argument_stack(struct arg *arg_list, int argc, void **esp);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -38,7 +50,8 @@ tid_t process_execute(const char *file_name)
     strlcpy(fn_copy, file_name, PGSIZE);
 
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+    char *first_token = get_first_token(file_name);
+    tid = thread_create(first_token, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR)
         palloc_free_page(fn_copy);
     return tid;
@@ -65,6 +78,7 @@ start_process(void *file_name_)
     if (!success)
         thread_exit();
 
+    hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
        threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -87,9 +101,10 @@ start_process(void *file_name_)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED)
+int process_wait(tid_t child_tid)
 {
-    while (true)
+    wait = 0;
+    while (wait == 0)
         ;
     return -1;
 }
@@ -116,6 +131,8 @@ void process_exit(void)
         pagedir_activate(NULL);
         pagedir_destroy(pd);
     }
+
+    wait = 1;
 }
 
 /* Sets up the CPU for running user code in the current
@@ -215,6 +232,18 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     bool success = false;
     int i;
 
+    // Parse file name.
+    struct arg *arg_list = malloc(sizeof(struct arg) * 32);
+    char *token, *save_ptr;
+    int argc = 0;
+
+    for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+    {
+        arg_list[argc].len = strlen(token) + 1;
+        arg_list[argc].token = token;
+        argc++;
+    }
+
     /* Allocate and activate page directory. */
     t->pagedir = pagedir_create();
     if (t->pagedir == NULL)
@@ -222,17 +251,18 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     process_activate();
 
     /* Open executable file. */
-    file = filesys_open(file_name);
+    char *file_name_ = arg_list[0].token;
+    file = filesys_open(file_name_);
     if (file == NULL)
     {
-        printf("load: %s: open failed\n", file_name);
+        printf("load: %s: open failed\n", file_name_);
         goto done;
     }
 
     /* Read and verify executable header. */
     if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
     {
-        printf("load: %s: error loading executable\n", file_name);
+        printf("load: %s: error loading executable\n", file_name_);
         goto done;
     }
 
@@ -301,11 +331,14 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
     /* Start address. */
     *eip = (void (*)(void))ehdr.e_entry;
 
+    // Push argumnets.
+    argument_stack(arg_list, argc, esp);
     success = true;
 
 done:
     /* We arrive here whether the load is successful or not. */
     file_close(file);
+    free(arg_list);
     return success;
 }
 
@@ -430,7 +463,7 @@ setup_stack(void **esp)
     {
         success = install_page(((uint8_t *)PHYS_BASE) - PGSIZE, kpage, true);
         if (success)
-            *esp = PHYS_BASE - 12;
+            *esp = PHYS_BASE;
         else
             palloc_free_page(kpage);
     }
@@ -454,4 +487,54 @@ install_page(void *upage, void *kpage, bool writable)
     /* Verify that there's not already a page at that virtual
        address, then map our page there. */
     return (pagedir_get_page(t->pagedir, upage) == NULL && pagedir_set_page(t->pagedir, upage, kpage, writable));
+}
+
+static char *get_first_token(const char *file_name)
+{
+    char *token, *save_ptr;
+    token = strtok_r(file_name, " ", &save_ptr);
+
+    return token;
+}
+
+static void argument_stack(struct arg *arg_list, int argc, void **esp)
+{
+    int i;
+    uint32_t argv;
+    uint32_t total_length = 0;
+    uint32_t word_align = 4;
+
+    for (i = argc - 1; i >= 0; i--)
+    {
+        *esp -= arg_list[i].len;
+        arg_list[i].stack_address = *esp;
+        strlcpy(*esp, arg_list[i].token, arg_list[i].len);
+
+        total_length += arg_list[i].len;
+    }
+    word_align = (4 - (total_length % 4)) % 4;
+    *esp -= word_align;
+    memset(*esp, 0, word_align);
+
+    for (i = argc; i >= 0; i--)
+    {
+        *esp -= 4;
+        if (i == argc)
+            memset(*esp, 0, 4);
+        else
+            memcpy(*esp, &arg_list[i].stack_address, 4);
+    }
+
+    // argv
+    argv = *esp;
+    *esp -= 4;
+    memcpy(*esp, &argv, 4);
+
+    // argc
+    *esp -= 4;
+    memcpy(*esp, &argc, 4);
+
+    // return address
+    *esp -= 4;
+    memset(*esp, 0, 4);
 }
