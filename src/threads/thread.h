@@ -132,7 +132,7 @@ struct thread *thread_current(void);
 tid_t thread_tid(void);
 const char *thread_name(void);
 
-void thread_exit(void) NO_RETURN;
+void thread_exit(int) NO_RETURN;
 void thread_yield(void);
 void thread_priority_yield(void);
 

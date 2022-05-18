@@ -301,12 +301,12 @@ tid_t thread_tid(void)
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
-void thread_exit(void)
+void thread_exit(int status)
 {
     ASSERT(!intr_context());
 
 #ifdef USERPROG
-    process_exit();
+    process_exit(status);
 #endif
 
     /* Remove thread from all threads list, set our status to dying,
@@ -488,9 +488,9 @@ kernel_thread(thread_func *function, void *aux)
 {
     ASSERT(function != NULL);
 
-    intr_enable(); /* The scheduler runs with interrupts off. */
-    function(aux); /* Execute the thread function. */
-    thread_exit(); /* If function() returns, kill the thread. */
+    intr_enable();  /* The scheduler runs with interrupts off. */
+    function(aux);  /* Execute the thread function. */
+    thread_exit(0); /* If function() returns, kill the thread. */
 }
 
 /* Returns the running thread. */

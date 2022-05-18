@@ -27,7 +27,7 @@ syscall_handler(struct intr_frame *f)
     }
     case SYS_EXIT: /* Terminate this process. */
     {
-        thread_exit();
+        thread_exit(0);
         break;
     }
     case SYS_EXEC: /* Switch current process. */

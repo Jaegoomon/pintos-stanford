@@ -76,7 +76,7 @@ start_process(void *file_name_)
     /* If load failed, quit. */
     palloc_free_page(file_name);
     if (!success)
-        thread_exit();
+        thread_exit(-1);
 
     hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
     /* Start the user process by simulating a return from an
@@ -110,7 +110,7 @@ int process_wait(tid_t child_tid)
 }
 
 /* Free the current process's resources. */
-void process_exit(void)
+void process_exit(int status)
 {
     struct thread *cur = thread_current();
     uint32_t *pd;
@@ -132,6 +132,7 @@ void process_exit(void)
         pagedir_destroy(pd);
     }
 
+    printf("%s: exit(%d)\n", cur->name, status);
     wait = 1;
 }
 
