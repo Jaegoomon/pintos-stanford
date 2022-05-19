@@ -3,9 +3,12 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "devices/shutdown.h"
 
 static void syscall_handler(struct intr_frame *);
+static void is_valid_addr(uint32_t *vaddr);
 
 void syscall_init(void)
 {
@@ -15,8 +18,9 @@ void syscall_init(void)
 static void
 syscall_handler(struct intr_frame *f)
 {
-    // hex_dump(f->esp, f->esp, 100, 1);
+    // hex_dump(esp, esp, 0xc0000000 - esp, true);
     uint32_t esp = f->esp;
+    is_valid_addr(esp);
 
     switch (*(uint32_t *)esp)
     {
@@ -27,7 +31,9 @@ syscall_handler(struct intr_frame *f)
     }
     case SYS_EXIT: /* Terminate this process. */
     {
-        thread_exit(0);
+        is_valid_addr((uint32_t *)(esp + 4));
+        int status = *(uint32_t *)(esp + 4);
+        thread_exit(status);
         break;
     }
     case SYS_EXEC: /* Switch current process. */
@@ -58,5 +64,14 @@ syscall_handler(struct intr_frame *f)
         break;
     default:
         break;
+    }
+}
+
+static void is_valid_addr(uint32_t *vaddr)
+{
+    struct thread *cur = thread_current();
+    if (vaddr == NULL || vaddr >= PHYS_BASE || pagedir_get_page(cur->pagedir, vaddr) == NULL)
+    {
+        thread_exit(-1);
     }
 }
