@@ -15,6 +15,8 @@ static void is_valid_addr(uint32_t *vaddr);
 static bool create(const char *file, unsigned initial_size);
 static bool remove(const char *file);
 static int open(const char *file);
+static int filesize(int fd);
+static int read(int fd, void *buffer, unsigned size);
 static void close(int fd);
 
 void syscall_init(void)
@@ -63,9 +65,15 @@ syscall_handler(struct intr_frame *f)
         break;
     }
     case SYS_FILESIZE: /* Obtain a file's size. */
+    {
+        f->eax = filesize(*(uint32_t *)(esp + 4));
         break;
+    }
     case SYS_READ: /* Read from a file. */
+    {
+        f->eax = read(*(uint32_t *)(esp + 20), *(uint32_t *)(esp + 24), *(uint32_t *)(esp + 28));
         break;
+    }
     case SYS_WRITE: /* Write to a file. */
     {
         if (*(uint32_t *)(esp + 20) == 1)
@@ -127,6 +135,33 @@ static int open(const char *file)
         cur->fdt[fd] = opend_file;
 
     return fd;
+}
+
+static int filesize(int fd)
+{
+    struct thread *cur = thread_current();
+    struct file *file = cur->fdt[fd];
+    return file_length(file);
+}
+
+static int read(int fd, void *buffer, unsigned size)
+{
+    is_valid_addr(buffer);
+    int size_read = -1;
+
+    if (fd == 0)
+        size_read = input_getc();
+    else
+    {
+        struct thread *cur = thread_current();
+        if (fd > 1 && fd < cur->next_fd)
+        {
+            struct file *file = cur->fdt[fd];
+            size_read = file_read(file, buffer, size);
+        }
+    }
+
+    return size_read;
 }
 
 static void close(int fd)
