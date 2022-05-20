@@ -14,6 +14,7 @@
 #include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -188,6 +189,11 @@ tid_t thread_create(const char *name, int priority,
     /* Initialize thread. */
     init_thread(t, name, priority, thread_current());
     tid = t->tid = allocate_tid();
+
+#ifdef USERPROG
+    t->fdt = malloc(sizeof(struct file) * 64);
+    t->next_fd = 2;
+#endif
 
     /* Prepare thread for first run by initializing its stack.
        Do this atomically so intermediate values for the 'stack'

@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/arithmetic.h"
 #include "threads/synch.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -102,6 +103,9 @@ struct thread
     struct thread *parent;
     struct list_elem child_elem;
     struct semaphore semaphore;
+
+    struct file **fdt;
+    int next_fd;
 #endif
 
     /* Owned by thread.c. */

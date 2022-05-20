@@ -6,9 +6,16 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
+#include "filesys/filesys.h"
 
 static void syscall_handler(struct intr_frame *);
 static void is_valid_addr(uint32_t *vaddr);
+
+static bool create(const char *file, unsigned initial_size);
+static bool remove(const char *file);
+static int open(const char *file);
+static void close(int fd);
 
 void syscall_init(void)
 {
@@ -41,11 +48,20 @@ syscall_handler(struct intr_frame *f)
     case SYS_WAIT: /* Wait for a child process to die. */
         break;
     case SYS_CREATE: /* Create a file. */
+    {
+        f->eax = create(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
         break;
+    }
     case SYS_REMOVE: /* Delete a file. */
+    {
+        f->eax = remove(*(uint32_t *)(esp + 4));
         break;
+    }
     case SYS_OPEN: /* Open a file. */
+    {
+        f->eax = open(*(uint32_t *)(esp + 4));
         break;
+    }
     case SYS_FILESIZE: /* Obtain a file's size. */
         break;
     case SYS_READ: /* Read from a file. */
@@ -61,7 +77,10 @@ syscall_handler(struct intr_frame *f)
     case SYS_TELL: /* Report current position in a file. */
         break;
     case SYS_CLOSE: /* Close a file. */
+    {
+        close(*(uint32_t *)(esp + 4));
         break;
+    }
     default:
         break;
     }
@@ -73,5 +92,53 @@ static void is_valid_addr(uint32_t *vaddr)
     if (vaddr == NULL || vaddr >= PHYS_BASE || pagedir_get_page(cur->pagedir, vaddr) == NULL)
     {
         thread_exit(-1);
+    }
+}
+
+static bool create(const char *file, unsigned initial_size)
+{
+    is_valid_addr(file);
+    if (file == NULL)
+        thread_exit(-1);
+
+    bool success = filesys_create(file, initial_size);
+    return success;
+}
+
+static bool remove(const char *file)
+{
+    is_valid_addr(file);
+    if (file == NULL)
+        thread_exit(-1);
+
+    bool success = filesys_remove(file);
+    return success;
+}
+
+static int open(const char *file)
+{
+    is_valid_addr(file);
+
+    struct thread *cur = thread_current();
+    struct file *opend_file = filesys_open(file);
+    int fd = (opend_file == NULL) ? -1 : cur->next_fd++;
+
+    if (fd != -1)
+        cur->fdt[fd] = opend_file;
+
+    return fd;
+}
+
+static void close(int fd)
+{
+    if (fd != 0 && fd != 1)
+    {
+        struct thread *cur = thread_current();
+        if (fd > 0 && fd < cur->next_fd)
+        {
+            struct file *file = cur->fdt[fd];
+            file_close(file);
+            cur->fdt[fd] = NULL;
+        }
     }
 }

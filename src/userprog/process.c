@@ -112,6 +112,7 @@ void process_exit(int status)
 {
     struct thread *cur = thread_current();
     uint32_t *pd;
+    int i;
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
@@ -131,6 +132,13 @@ void process_exit(int status)
     }
 
     printf("%s: exit(%d)\n", cur->name, status);
+
+    // Free all files in FDT.
+    for (i = 2; i < cur->next_fd; i++)
+    {
+        file_close(cur->fdt[i]);
+    }
+    free(cur->fdt);
 
     if (cur->parent != NULL)
     {
