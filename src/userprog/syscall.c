@@ -4,6 +4,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
@@ -17,10 +18,12 @@ static bool remove(const char *file);
 static int open(const char *file);
 static int filesize(int fd);
 static int read(int fd, void *buffer, unsigned size);
+static int write(int fd, const void *buffer, unsigned size);
 static void close(int fd);
 
 void syscall_init(void)
 {
+    lock_init(&filesys_lock);
     intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -76,8 +79,7 @@ syscall_handler(struct intr_frame *f)
     }
     case SYS_WRITE: /* Write to a file. */
     {
-        if (*(uint32_t *)(esp + 20) == 1)
-            putbuf(*(uint32_t *)(esp + 24), *(uint32_t *)(esp + 28));
+        f->eax = write(*(uint32_t *)(esp + 20), *(uint32_t *)(esp + 24), *(uint32_t *)(esp + 28));
         break;
     }
     case SYS_SEEK: /* Change position in a file. */
@@ -162,6 +164,30 @@ static int read(int fd, void *buffer, unsigned size)
     }
 
     return size_read;
+}
+
+static int write(int fd, const void *buffer, unsigned size)
+{
+    is_valid_addr(buffer);
+    int size_written = -1;
+
+    lock_acquire(&filesys_lock);
+
+    if (fd == 1)
+        putbuf(buffer, size);
+    else
+    {
+        struct thread *cur = thread_current();
+        if (fd > 0 && fd < cur->next_fd)
+        {
+            struct file *file = cur->fdt[fd];
+            size_written = file_write(file, buffer, size);
+        }
+    }
+
+    lock_release(&filesys_lock);
+
+    return size_written;
 }
 
 static void close(int fd)
