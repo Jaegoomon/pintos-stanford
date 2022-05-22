@@ -50,6 +50,7 @@ void sema_init(struct semaphore *sema, unsigned value)
     sema->value = value;
 #ifdef USERPROG
     sema->status = 0;
+    sema->from = 0;
 #endif
     list_init(&sema->waiters);
 }

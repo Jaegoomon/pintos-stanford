@@ -3,6 +3,8 @@
 
 #include "threads/synch.h"
 
+typedef int pid_t;
+
 struct lock filesys_lock;
 
 void syscall_init(void);

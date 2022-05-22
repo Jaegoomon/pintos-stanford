@@ -5,7 +5,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
+#include "threads/palloc.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "filesys/filesys.h"
@@ -13,6 +15,8 @@
 static void syscall_handler(struct intr_frame *);
 static void is_valid_addr(uint32_t *vaddr);
 
+pid_t exec(const char *cmd_line);
+int wait(pid_t pid);
 static bool create(const char *file, unsigned initial_size);
 static bool remove(const char *file);
 static int open(const char *file);
@@ -49,9 +53,15 @@ syscall_handler(struct intr_frame *f)
         break;
     }
     case SYS_EXEC: /* Switch current process. */
+    {
+        f->eax = exec(*(uint32_t *)(esp + 4));
         break;
+    }
     case SYS_WAIT: /* Wait for a child process to die. */
+    {
+        f->eax = wait(*(uint32_t *)(esp + 4));
         break;
+    }
     case SYS_CREATE: /* Create a file. */
     {
         f->eax = create(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
@@ -103,6 +113,29 @@ static void is_valid_addr(uint32_t *vaddr)
     {
         thread_exit(-1);
     }
+}
+
+pid_t exec(const char *cmd_line)
+{
+    is_valid_addr(cmd_line);
+
+    char *file_name;
+    struct thread *cur = thread_current();
+    file_name = palloc_get_page(0);
+    strlcpy(file_name, cmd_line, PGSIZE);
+
+    pid_t pid = process_execute(file_name);
+    sema_down(&cur->semaphore);
+
+    if (cur->semaphore.status == -1)
+        return -1;
+
+    return pid;
+}
+
+int wait(pid_t pid)
+{
+    return process_wait(pid);
 }
 
 static bool create(const char *file, unsigned initial_size)

@@ -12,6 +12,7 @@ struct semaphore
     struct list waiters; /* List of waiting threads. */
 #ifdef USERPROG
     int status;
+    int from;
 #endif
 };
 

@@ -11,6 +11,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "threads/thread.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -30,6 +31,7 @@ static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 static char *get_first_token(const char *file_name);
 static void argument_stack(struct arg *arg_list, int argc, void **esp);
+static bool find_child(tid_t child_tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -76,6 +78,9 @@ start_process(void *file_name_)
     if (!success)
         thread_exit(-1);
 
+    struct thread *cur = thread_current();
+    sema_up(&cur->parent->semaphore);
+
     // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
@@ -102,9 +107,21 @@ start_process(void *file_name_)
 int process_wait(tid_t child_tid)
 {
     struct thread *cur = thread_current();
-    sema_down(&cur->semaphore);
 
-    return &cur->semaphore.status;
+    if (cur->semaphore.from != child_tid)
+    {
+        if (!find_child(child_tid))
+            return -1;
+        else
+        {
+            while (find_child(child_tid))
+                sema_down(&cur->semaphore);
+        }
+    }
+    else
+        cur->semaphore.from = 0;
+
+    return cur->semaphore.status;
 }
 
 /* Free the current process's resources. */
@@ -143,6 +160,8 @@ void process_exit(int status)
     if (cur->parent != NULL)
     {
         cur->parent->semaphore.status = status;
+        cur->parent->semaphore.from = cur->tid;
+        list_remove(&cur->child_elem);
         sema_up(&cur->parent->semaphore);
     }
 }
@@ -549,4 +568,24 @@ static void argument_stack(struct arg *arg_list, int argc, void **esp)
     // return address
     *esp -= 4;
     memset(*esp, 0, 4);
+}
+
+static bool find_child(tid_t child_tid)
+{
+    struct thread *t;
+    struct thread *cur = thread_current();
+    bool success = false;
+
+    if (!list_empty(&cur->child_list))
+    {
+        struct list_elem *e;
+        for (e = list_begin(&cur->child_list); e != list_end(&cur->child_list); e = list_next(e))
+        {
+            t = list_entry(e, struct thread, child_elem);
+            if (t->tid == child_tid)
+                success = true;
+        }
+    }
+
+    return success;
 }
