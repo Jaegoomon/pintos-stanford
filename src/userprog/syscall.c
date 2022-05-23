@@ -23,6 +23,8 @@ static int open(const char *file);
 static int filesize(int fd);
 static int read(int fd, void *buffer, unsigned size);
 static int write(int fd, const void *buffer, unsigned size);
+static void seek(int fd, unsigned position);
+static unsigned tell(int fd);
 static void close(int fd);
 
 void syscall_init(void)
@@ -93,9 +95,15 @@ syscall_handler(struct intr_frame *f)
         break;
     }
     case SYS_SEEK: /* Change position in a file. */
+    {
+        seek(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
         break;
+    }
     case SYS_TELL: /* Report current position in a file. */
+    {
+        f->eax = tell(*(uint32_t *)(esp + 4));
         break;
+    }
     case SYS_CLOSE: /* Close a file. */
     {
         close(*(uint32_t *)(esp + 4));
@@ -221,6 +229,22 @@ static int write(int fd, const void *buffer, unsigned size)
     lock_release(&filesys_lock);
 
     return size_written;
+}
+
+static void seek(int fd, unsigned position)
+{
+    struct thread *cur = thread_current();
+    struct file *file = cur->fdt[fd];
+
+    file_seek(file, position);
+}
+
+static unsigned tell(int fd)
+{
+    struct thread *cur = thread_current();
+    struct file *file = cur->fdt[fd];
+
+    return file_tell(file);
 }
 
 static void close(int fd)
