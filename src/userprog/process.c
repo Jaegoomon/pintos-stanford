@@ -148,8 +148,6 @@ void process_exit(int status)
         pagedir_destroy(pd);
     }
 
-    printf("%s: exit(%d)\n", cur->name, status);
-
     // Free all files in FDT.
     for (i = 2; i < cur->next_fd; i++)
     {

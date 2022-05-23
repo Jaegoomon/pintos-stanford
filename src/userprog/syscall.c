@@ -15,8 +15,9 @@
 static void syscall_handler(struct intr_frame *);
 static void is_valid_addr(uint32_t *vaddr);
 
+static void halt(void);
 pid_t exec(const char *cmd_line);
-int wait(pid_t pid);
+static int wait(pid_t pid);
 static bool create(const char *file, unsigned initial_size);
 static bool remove(const char *file);
 static int open(const char *file);
@@ -44,14 +45,13 @@ syscall_handler(struct intr_frame *f)
     {
     case SYS_HALT: /* Halt the operating system. */
     {
-        shutdown_power_off();
+        halt();
         break;
     }
     case SYS_EXIT: /* Terminate this process. */
     {
         is_valid_addr((uint32_t *)(esp + 4));
-        int status = *(uint32_t *)(esp + 4);
-        thread_exit(status);
+        exit(*(uint32_t *)(esp + 4));
         break;
     }
     case SYS_EXEC: /* Switch current process. */
@@ -118,12 +118,23 @@ static void is_valid_addr(uint32_t *vaddr)
 {
     struct thread *cur = thread_current();
     if (vaddr == NULL || vaddr >= PHYS_BASE || pagedir_get_page(cur->pagedir, vaddr) == NULL)
-    {
-        thread_exit(-1);
-    }
+        exit(-1);
 }
 
-pid_t exec(const char *cmd_line)
+static void halt()
+{
+    shutdown_power_off();
+}
+
+void exit(int status)
+{
+    struct thread *cur = thread_current();
+    printf("%s: exit(%d)\n", cur->name, status);
+
+    thread_exit(status);
+}
+
+static pid_t exec(const char *cmd_line)
 {
     is_valid_addr(cmd_line);
 
@@ -141,7 +152,7 @@ pid_t exec(const char *cmd_line)
     return pid;
 }
 
-int wait(pid_t pid)
+static int wait(pid_t pid)
 {
     return process_wait(pid);
 }
@@ -150,7 +161,7 @@ static bool create(const char *file, unsigned initial_size)
 {
     is_valid_addr(file);
     if (file == NULL)
-        thread_exit(-1);
+        exit(-1);
 
     bool success = filesys_create(file, initial_size);
     return success;
@@ -160,7 +171,7 @@ static bool remove(const char *file)
 {
     is_valid_addr(file);
     if (file == NULL)
-        thread_exit(-1);
+        exit(-1);
 
     bool success = filesys_remove(file);
     return success;
