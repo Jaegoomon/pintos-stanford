@@ -351,7 +351,7 @@ void thread_priority_yield(void)
     struct thread *t = list_entry(e, struct thread, elem);
 
     // Check if current thread is no longer highest priority.
-    if (t->priority > thread_get_priority())
+    if (t->priority >= thread_get_priority())
         thread_yield();
 }
 
@@ -557,7 +557,9 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
 #ifdef USERPROG
     t->parent = parent;
     list_init(&t->child_list);
-    sema_init(&t->semaphore, 0);
+    sema_init(&t->exec_sema, 0);
+    sema_init(&t->wait_sema, 0);
+    t->exit_status = 0;
 
     if (parent != NULL)
     {

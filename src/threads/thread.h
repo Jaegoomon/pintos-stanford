@@ -102,7 +102,9 @@ struct thread
     struct list child_list;
     struct thread *parent;
     struct list_elem child_elem;
-    struct semaphore semaphore;
+    struct semaphore exec_sema;
+    struct semaphore wait_sema;
+    int exit_status;
 
     struct file **fdt;
     int next_fd;

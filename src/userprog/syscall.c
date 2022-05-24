@@ -16,7 +16,7 @@ static void syscall_handler(struct intr_frame *);
 static void is_valid_addr(uint32_t *vaddr);
 
 static void halt(void);
-pid_t exec(const char *cmd_line);
+static pid_t exec(const char *cmd_line);
 static int wait(pid_t pid);
 static bool create(const char *file, unsigned initial_size);
 static bool remove(const char *file);
@@ -144,9 +144,11 @@ static pid_t exec(const char *cmd_line)
     strlcpy(file_name, cmd_line, PGSIZE);
 
     pid_t pid = process_execute(file_name);
-    sema_down(&cur->semaphore);
 
-    if (cur->semaphore.status == -1)
+    struct thread *child = find_child(pid);
+    sema_down(&child->exec_sema);
+
+    if (child->exit_status == -1)
         return -1;
 
     return pid;

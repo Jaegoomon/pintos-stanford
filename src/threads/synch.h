@@ -10,10 +10,6 @@ struct semaphore
 {
     unsigned value;      /* Current value. */
     struct list waiters; /* List of waiting threads. */
-#ifdef USERPROG
-    int status;
-    int from;
-#endif
 };
 
 void sema_init(struct semaphore *, unsigned value);
