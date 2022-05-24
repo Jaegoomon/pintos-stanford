@@ -561,6 +561,8 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     sema_init(&t->wait_sema, 0);
     t->exit_status = 0;
 
+    t->executed_file = NULL;
+
     if (parent != NULL)
     {
         list_push_back(&parent->child_list, &t->child_elem);

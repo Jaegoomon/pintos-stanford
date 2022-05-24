@@ -107,6 +107,7 @@ struct thread
     int exit_status;
 
     struct file **fdt;
+    struct file *executed_file;
     int next_fd;
 #endif
 

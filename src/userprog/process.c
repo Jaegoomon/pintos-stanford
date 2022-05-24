@@ -154,6 +154,8 @@ void process_exit(int status)
     }
     free(cur->fdt);
 
+    file_close(cur->executed_file);
+
     if (cur->parent != NULL)
     {
         cur->exit_status = status;
@@ -286,6 +288,9 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
         goto done;
     }
 
+    file_deny_write(file);
+    t->executed_file = file;
+
     /* Read and verify executable header. */
     if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr || memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 || ehdr.e_machine != 3 || ehdr.e_version != 1 || ehdr.e_phentsize != sizeof(struct Elf32_Phdr) || ehdr.e_phnum > 1024)
     {
@@ -364,7 +369,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp)
 
 done:
     /* We arrive here whether the load is successful or not. */
-    file_close(file);
     free(arg_list);
     return success;
 }
