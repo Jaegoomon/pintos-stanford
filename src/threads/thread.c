@@ -14,6 +14,7 @@
 #include "threads/malloc.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -189,6 +190,11 @@ tid_t thread_create(const char *name, int priority,
     init_thread(t, name, priority, thread_current());
     tid = t->tid = allocate_tid();
 
+#ifdef USERPROG
+    t->fdt = malloc(sizeof(struct file) * 128);
+    t->next_fd = 2;
+#endif
+
     /* Prepare thread for first run by initializing its stack.
        Do this atomically so intermediate values for the 'stack'
        member cannot be observed. */
@@ -215,7 +221,7 @@ tid_t thread_create(const char *name, int priority,
     thread_unblock(t);
 
     // Check if current thread is no longer highest priority.
-    if (priority > thread_get_priority())
+    if (priority >= thread_get_priority())
         thread_yield();
 
     return tid;
@@ -301,20 +307,29 @@ tid_t thread_tid(void)
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
-void thread_exit(void)
+void thread_exit(int status)
 {
     ASSERT(!intr_context());
 
+    struct thread *cur = thread_current();
+
 #ifdef USERPROG
     process_exit();
+
+    if (cur->parent != NULL)
+    {
+        cur->exit_status = status;
+        sema_up(&cur->wait_sema);
+    }
 #endif
 
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
-    list_remove(&thread_current()->allelem);
-    thread_current()->status = THREAD_DYING;
+    list_remove(&cur->allelem);
+    cur->status = THREAD_DYING;
+
     schedule();
     NOT_REACHED();
 }
@@ -345,7 +360,7 @@ void thread_priority_yield(void)
     struct thread *t = list_entry(e, struct thread, elem);
 
     // Check if current thread is no longer highest priority.
-    if (t->priority > thread_get_priority())
+    if (t->priority >= thread_get_priority())
         thread_yield();
 }
 
@@ -488,9 +503,9 @@ kernel_thread(thread_func *function, void *aux)
 {
     ASSERT(function != NULL);
 
-    intr_enable(); /* The scheduler runs with interrupts off. */
-    function(aux); /* Execute the thread function. */
-    thread_exit(); /* If function() returns, kill the thread. */
+    intr_enable();  /* The scheduler runs with interrupts off. */
+    function(aux);  /* Execute the thread function. */
+    thread_exit(0); /* If function() returns, kill the thread. */
 }
 
 /* Returns the running thread. */
@@ -548,6 +563,22 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     }
 
     list_init(&t->lock_list);
+#ifdef USERPROG
+    t->parent = parent;
+    list_init(&t->child_list);
+    sema_init(&t->exec_sema, 0);
+    sema_init(&t->wait_sema, 0);
+    sema_init(&t->exit_sema, 0);
+    t->exit_status = -1;
+    t->load_status = 0;
+
+    t->executed_file = NULL;
+
+    if (parent != NULL)
+    {
+        list_push_back(&parent->child_list, &t->child_elem);
+    }
+#endif
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/arithmetic.h"
+#include "threads/synch.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -97,6 +99,18 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir; /* Page directory. */
+    struct list child_list;
+    struct thread *parent;
+    struct list_elem child_elem;
+    struct semaphore exec_sema;
+    struct semaphore wait_sema;
+    struct semaphore exit_sema;
+    int exit_status;
+    int load_status;
+
+    struct file **fdt;
+    struct file *executed_file;
+    int next_fd;
 #endif
 
     /* Owned by thread.c. */
@@ -132,7 +146,7 @@ struct thread *thread_current(void);
 tid_t thread_tid(void);
 const char *thread_name(void);
 
-void thread_exit(void) NO_RETURN;
+void thread_exit(int) NO_RETURN;
 void thread_yield(void);
 void thread_priority_yield(void);
 
