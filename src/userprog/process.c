@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -77,11 +78,11 @@ start_process(void *file_name_)
     palloc_free_page(file_name);
     if (!success)
     {
-        cur->exit_status = -1;
         sema_up(&cur->exec_sema);
         thread_exit(-1);
     }
 
+    cur->exit_status = 0;
     sema_up(&cur->exec_sema);
 
     // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
@@ -109,22 +110,24 @@ start_process(void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid)
 {
-    struct thread *cur = thread_current();
-    struct thread *child = find_child(child_tid);
-
-    if (child != NULL)
+    if (child_tid != -1)
     {
-        while (find_child(child_tid) != NULL)
-            sema_down(&child->wait_sema);
+        struct thread *cur = thread_current();
+        struct thread *child = find_child(child_tid);
 
-        return child->exit_status;
+        if (child != NULL)
+        {
+            sema_down(&child->wait_sema);
+            list_remove(&child->child_elem);
+            return child->exit_status;
+        }
     }
-    else
-        return -1;
+
+    return -1;
 }
 
 /* Free the current process's resources. */
-void process_exit(int status)
+void process_exit(void)
 {
     struct thread *cur = thread_current();
     uint32_t *pd;
@@ -155,13 +158,6 @@ void process_exit(int status)
     free(cur->fdt);
 
     file_close(cur->executed_file);
-
-    if (cur->parent != NULL)
-    {
-        cur->exit_status = status;
-        list_remove(&cur->child_elem);
-        sema_up(&cur->wait_sema);
-    }
 }
 
 /* Sets up the CPU for running user code in the current

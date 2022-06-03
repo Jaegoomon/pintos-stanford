@@ -221,7 +221,7 @@ tid_t thread_create(const char *name, int priority,
     thread_unblock(t);
 
     // Check if current thread is no longer highest priority.
-    if (priority > thread_get_priority())
+    if (priority >= thread_get_priority())
         thread_yield();
 
     return tid;
@@ -311,16 +311,25 @@ void thread_exit(int status)
 {
     ASSERT(!intr_context());
 
+    struct thread *cur = thread_current();
+
 #ifdef USERPROG
-    process_exit(status);
+    process_exit();
+
+    if (cur->parent != NULL)
+    {
+        cur->exit_status = status;
+        sema_up(&cur->wait_sema);
+    }
 #endif
 
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
        when it calls thread_schedule_tail(). */
     intr_disable();
-    list_remove(&thread_current()->allelem);
-    thread_current()->status = THREAD_DYING;
+    list_remove(&cur->allelem);
+    cur->status = THREAD_DYING;
+
     schedule();
     NOT_REACHED();
 }
@@ -559,7 +568,7 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     list_init(&t->child_list);
     sema_init(&t->exec_sema, 0);
     sema_init(&t->wait_sema, 0);
-    t->exit_status = 0;
+    t->exit_status = -1;
 
     t->executed_file = NULL;
 
