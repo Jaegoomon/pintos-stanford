@@ -207,6 +207,8 @@ static int read(int fd, void *buffer, unsigned size)
     is_valid_addr(buffer);
     int size_read = -1;
 
+    lock_acquire(&filesys_lock);
+
     if (fd == 0)
         size_read = input_getc();
     else
@@ -218,6 +220,8 @@ static int read(int fd, void *buffer, unsigned size)
             size_read = file_read(file, buffer, size);
         }
     }
+
+    lock_release(&filesys_lock);
 
     return size_read;
 }
