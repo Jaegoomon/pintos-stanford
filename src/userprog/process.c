@@ -76,14 +76,11 @@ start_process(void *file_name_)
 
     /* If load failed, quit. */
     palloc_free_page(file_name);
-    if (!success)
-    {
-        sema_up(&cur->exec_sema);
-        thread_exit(-1);
-    }
-
-    cur->exit_status = 0;
+    cur->load_status = success ? 1 : 0;
     sema_up(&cur->exec_sema);
+
+    if (!success)
+        thread_exit(-1);
 
     // hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
     /* Start the user process by simulating a return from an

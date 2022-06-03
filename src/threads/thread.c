@@ -191,7 +191,7 @@ tid_t thread_create(const char *name, int priority,
     tid = t->tid = allocate_tid();
 
 #ifdef USERPROG
-    t->fdt = malloc(sizeof(struct file) * 64);
+    t->fdt = malloc(sizeof(struct file) * 128);
     t->next_fd = 2;
 #endif
 
@@ -569,6 +569,7 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     sema_init(&t->exec_sema, 0);
     sema_init(&t->wait_sema, 0);
     t->exit_status = -1;
+    t->load_status = 0;
 
     t->executed_file = NULL;
 

@@ -140,15 +140,17 @@ static pid_t exec(const char *cmd_line)
 
     char *file_name;
     struct thread *cur = thread_current();
+
     file_name = palloc_get_page(0);
     strlcpy(file_name, cmd_line, PGSIZE);
 
     pid_t pid = process_execute(file_name);
-
     struct thread *child = find_child(pid);
+
+    palloc_free_page(file_name);
     sema_down(&child->exec_sema);
 
-    if (child->exit_status == -1)
+    if (child->load_status == 0)
         return -1;
 
     return pid;

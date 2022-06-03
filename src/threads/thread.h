@@ -105,6 +105,7 @@ struct thread
     struct semaphore exec_sema;
     struct semaphore wait_sema;
     int exit_status;
+    int load_status;
 
     struct file **fdt;
     struct file *executed_file;
