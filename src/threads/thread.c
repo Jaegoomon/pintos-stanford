@@ -568,6 +568,7 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     list_init(&t->child_list);
     sema_init(&t->exec_sema, 0);
     sema_init(&t->wait_sema, 0);
+    sema_init(&t->exit_sema, 0);
     t->exit_status = -1;
     t->load_status = 0;
 

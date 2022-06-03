@@ -104,6 +104,7 @@ struct thread
     struct list_elem child_elem;
     struct semaphore exec_sema;
     struct semaphore wait_sema;
+    struct semaphore exit_sema;
     int exit_status;
     int load_status;
 

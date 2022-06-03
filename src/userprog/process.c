@@ -114,6 +114,7 @@ int process_wait(tid_t child_tid)
 
         if (child != NULL)
         {
+            sema_up(&child->exit_sema);
             sema_down(&child->wait_sema);
             list_remove(&child->child_elem);
             return child->exit_status;

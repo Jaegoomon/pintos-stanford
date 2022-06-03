@@ -129,6 +129,9 @@ static void halt()
 void exit(int status)
 {
     struct thread *cur = thread_current();
+    if (cur->parent != NULL)
+        sema_down(&cur->exit_sema);
+
     printf("%s: exit(%d)\n", cur->name, status);
 
     thread_exit(status);
