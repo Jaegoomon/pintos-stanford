@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <hash.h>
 #include "threads/arithmetic.h"
 #include "threads/synch.h"
 #include "filesys/file.h"
@@ -111,6 +112,8 @@ struct thread
     struct file **fdt;
     struct file *executed_file;
     int next_fd;
+
+    struct hash vm;
 #endif
 
     /* Owned by thread.c. */

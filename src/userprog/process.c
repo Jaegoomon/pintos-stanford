@@ -20,6 +20,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "vm/page.h"
 
 struct arg
 {
@@ -73,6 +74,9 @@ start_process(void *file_name_)
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
+
+    /* Initializing the set of vm_entries */
+    vm_init(&cur->vm);
 
     /* If load failed, quit. */
     palloc_free_page(file_name);
@@ -130,6 +134,9 @@ void process_exit(void)
     struct thread *cur = thread_current();
     uint32_t *pd;
     int i;
+
+    /* Delete vm_entries */
+    vm_destory(&cur->vm);
 
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
