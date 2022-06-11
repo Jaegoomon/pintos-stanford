@@ -20,7 +20,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
-#include "vm/page.h"
 
 struct arg
 {
@@ -68,15 +67,15 @@ start_process(void *file_name_)
     bool success;
     struct thread *cur = thread_current();
 
+    /* Initializing the set of vm_entries */
+    vm_init(&cur->vm);
+
     /* Initialize interrupt frame and load executable. */
     memset(&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
     if_.eflags = FLAG_IF | FLAG_MBS;
     success = load(file_name, &if_.eip, &if_.esp);
-
-    /* Initializing the set of vm_entries */
-    vm_init(&cur->vm);
 
     /* If load failed, quit. */
     palloc_free_page(file_name);
@@ -454,25 +453,25 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
         size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-        /* Get a page of memory. */
-        uint8_t *kpage = palloc_get_page(PAL_USER);
-        if (kpage == NULL)
-            return false;
+        /* Create vm_entry(Use malloc) */
+        struct vm_entry *vme = malloc(sizeof(struct vm_entry));
 
-        /* Load this page. */
-        if (file_read(file, kpage, page_read_bytes) != (int)page_read_bytes)
-        {
-            palloc_free_page(kpage);
-            return false;
-        }
-        memset(kpage + page_read_bytes, 0, page_zero_bytes);
+        /* Setting vm_entry members,
+           offset and size of file to read when virtual page is required,
+           zero byte to pad at the end, … */
+        vme->file = file;
+        vme->vaddr = upage;
+        vme->read_bytes = page_read_bytes;
+        vme->zero_bytes = page_zero_bytes;
+        vme->offset = file->pos;
+        vme->writable = writable;
 
-        /* Add the page to the process's address space. */
-        if (!install_page(upage, kpage, writable))
-        {
-            palloc_free_page(kpage);
+        file_seek(file, file_tell(file) + page_read_bytes);
+
+        /* Add vm_entry to hash table by insert_vme() */
+        struct thread *cur = thread_current();
+        if (!insert_vme(&cur->vm, vme))
             return false;
-        }
 
         /* Advance. */
         read_bytes -= page_read_bytes;
@@ -499,6 +498,23 @@ setup_stack(void **esp)
         else
             palloc_free_page(kpage);
     }
+
+    /* Create vm_entry */
+    struct vm_entry *vme = malloc(sizeof(struct vm_entry));
+
+    /* Set up vm_entry members */
+    vme->file = NULL;
+    vme->vaddr = (uint8_t *)PHYS_BASE - PGSIZE;
+    vme->read_bytes = PGSIZE;
+    vme->zero_bytes = 0;
+    vme->offset = 0;
+    vme->writable = true;
+
+    /* Using insert_vme(), add vm_enty to hash table */
+    struct thread *cur = thread_current();
+    if (!insert_vme(&cur->vm, vme))
+        return false;
+
     return success;
 }
 
@@ -589,4 +605,30 @@ struct thread *find_child(tid_t child_tid)
     }
 
     return NULL;
+}
+
+bool handle_mm_fault(struct vm_entry *vme)
+{
+    bool success = false;
+
+    if (vme == NULL || vme->file == NULL)
+        goto done;
+
+    /* Allocate physical memory. */
+    uint8_t *kpage = palloc_get_page(PAL_USER);
+    if (kpage == NULL)
+        goto done;
+
+    /* Load file in the disk to physical memory. */
+    if (!load_file(kpage, vme))
+        goto done;
+
+    /* Update page table entry. */
+    success = install_page(vme->vaddr, kpage, vme->writable);
+
+done:
+    if (!success)
+        palloc_free_page(kpage);
+
+    return success;
 }
