@@ -39,7 +39,9 @@ syscall_handler(struct intr_frame *f)
 {
     // hex_dump(esp, esp, 0xc0000000 - esp, true);
     uint32_t esp = f->esp;
-    is_valid_addr(esp);
+    struct thread *cur = thread_current();
+    if (esp == NULL || esp >= PHYS_BASE || pagedir_get_page(cur->pagedir, esp) == NULL)
+        exit(-1);
 
     switch (*(uint32_t *)esp)
     {
@@ -117,7 +119,7 @@ syscall_handler(struct intr_frame *f)
 static void is_valid_addr(uint32_t *vaddr)
 {
     struct thread *cur = thread_current();
-    if (vaddr == NULL || vaddr >= PHYS_BASE || pagedir_get_page(cur->pagedir, vaddr) == NULL)
+    if (vaddr == NULL || vaddr >= PHYS_BASE)
         exit(-1);
 }
 

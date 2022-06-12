@@ -612,12 +612,12 @@ bool handle_mm_fault(struct vm_entry *vme)
     bool success = false;
 
     if (vme == NULL || vme->file == NULL)
-        goto done;
+        return success;
 
     /* Allocate physical memory. */
     uint8_t *kpage = palloc_get_page(PAL_USER);
     if (kpage == NULL)
-        goto done;
+        return success;
 
     /* Load file in the disk to physical memory. */
     if (!load_file(kpage, vme))
