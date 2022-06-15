@@ -1,3 +1,6 @@
+#ifndef VM_PAGE_H
+#define VM_PAGE_H
+
 #include <hash.h>
 #include "filesys/file.h"
 
@@ -19,3 +22,5 @@ struct vm_entry *find_vme(void *vaddr);
 bool insert_vme(struct hash *vm, struct vm_entry *vme);
 bool delete_vme(struct hash *vm, struct vm_entry *vme);
 bool load_file(void *kpage, struct vm_entry *vme);
+
+#endif
