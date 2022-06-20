@@ -134,6 +134,9 @@ void process_exit(void)
     uint32_t *pd;
     int i;
 
+    /* munmap */
+    munmap(INT32_MAX);
+
     /* Delete vm_entries */
     vm_destory(&cur->vm);
 

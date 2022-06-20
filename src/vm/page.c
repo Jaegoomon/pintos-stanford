@@ -3,6 +3,7 @@
 #include "filesys/file.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux);
 static bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux);
@@ -43,6 +44,10 @@ bool insert_vme(struct hash *vm, struct vm_entry *vme)
 
 bool delete_vme(struct hash *vm, struct vm_entry *vme)
 {
+    struct hash_elem *result = hash_delete(vm, &vme->elem);
+    if (result == NULL)
+        return false;
+    return true;
 }
 
 bool load_file(void *kaddr, struct vm_entry *vme)
@@ -79,4 +84,38 @@ static void vm_destroy_func(struct hash_elem *e, void *aux)
 {
     struct vm_entry *vme = hash_entry(e, struct vm_entry, elem);
     free(vme);
+}
+
+void mmunmap_file(struct mmap_file *mmap_file)
+{
+    struct thread *cur = thread_current();
+
+    struct list *vme_list = &mmap_file->vme_list;
+    if (!list_empty(vme_list))
+    {
+        struct list_elem *e = list_begin(vme_list);
+        struct vm_entry *vme;
+        while (e != list_end(vme_list))
+        {
+            struct list_elem *next = list_next(e);
+
+            /* Delete vm_entry */
+            vme = list_entry(e, struct vm_entry, mmap_elem);
+            bool success = delete_vme(&cur->vm, vme);
+
+            /* Dirty checking */
+            bool is_dirty = pagedir_is_dirty(cur->pagedir, vme->vaddr);
+            void *kaddr = pagedir_get_page(cur->pagedir, vme->vaddr);
+            if (is_dirty)
+                file_write_at(vme->file, kaddr, PGSIZE, vme->offset);
+
+            /* Clear page table entry */
+            palloc_free_page(kaddr);
+            pagedir_clear_page(cur->pagedir, vme->vaddr);
+            /* Free vm_entry */
+            free(vme);
+
+            e = next;
+        }
+    }
 }

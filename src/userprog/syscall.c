@@ -117,6 +117,11 @@ syscall_handler(struct intr_frame *f)
         f->eax = mmap(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
         break;
     }
+    case SYS_MUNMAP: /* Remove a memory mapping. */
+    {
+        munmap(*(uint32_t *)(esp + 4));
+        break;
+    }
     default:
         break;
     }
@@ -345,4 +350,30 @@ static int mmap(int fd, void *addr)
     }
 
     return mmap_file->mapid;
+}
+
+void munmap(int mapid)
+{
+    struct list *mmap_list = &thread_current()->mmap_list;
+
+    if (!list_empty(mmap_list))
+    {
+        struct mmap_file *mf;
+        struct list_elem *e = list_begin(mmap_list);
+        while (e != list_end(mmap_list))
+        {
+            struct list_elem *next = list_next(e);
+
+            mf = list_entry(e, struct mmap_file, elem);
+            if (mf->mapid == mapid || mapid == INT32_MAX)
+            {
+                mmunmap_file(mf);
+                list_remove(e);
+                free(mf);
+                close(mapid);
+            }
+
+            e = next;
+        }
+    }
 }

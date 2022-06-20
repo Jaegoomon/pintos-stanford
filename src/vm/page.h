@@ -39,5 +39,6 @@ struct vm_entry *find_vme(void *vaddr);
 bool insert_vme(struct hash *vm, struct vm_entry *vme);
 bool delete_vme(struct hash *vm, struct vm_entry *vme);
 bool load_file(void *kpage, struct vm_entry *vme);
+void mmunmap_file(struct mmap_file *mmap_file);
 
 #endif
