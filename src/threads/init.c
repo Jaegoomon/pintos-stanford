@@ -30,6 +30,7 @@
 #include "userprog/tss.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -131,8 +132,8 @@ int main(void)
     /* Initialize LRU list */
     lru_list_init();
 
-    // /* Initialize swap bitmap */
-    // init_swap_bitmap();
+    /* Initialize swap bitmap */
+    swap_bitmap_init();
 
     printf("Boot complete.\n");
 

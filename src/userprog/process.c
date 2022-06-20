@@ -22,6 +22,7 @@
 #include "threads/malloc.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 
 struct arg
 {
@@ -471,6 +472,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
         vme->offset = file->pos;
         vme->writable = writable;
         vme->type = VM_BIN;
+        vme->sec_idx = -1;
 
         file_seek(file, file_tell(file) + page_read_bytes);
 
@@ -516,6 +518,7 @@ setup_stack(void **esp)
     vme->offset = 0;
     vme->writable = true;
     vme->type = VM_ANON;
+    vme->sec_idx = -1;
 
     /* Using insert_vme(), add vm_enty to hash table */
     struct thread *cur = thread_current();
@@ -618,7 +621,7 @@ bool handle_mm_fault(struct vm_entry *vme)
 {
     bool success = false;
 
-    if (vme == NULL || vme->file == NULL)
+    if (vme == NULL)
         return success;
 
     /* Allocate page. */
@@ -641,6 +644,14 @@ bool handle_mm_fault(struct vm_entry *vme)
         /* Load file in the disk to physical memory. */
         if (!load_file(page->kaddr, vme))
             goto done;
+        break;
+    }
+    case VM_ANON:
+    {
+        if (vme->sec_idx == -1 && vme->file != NULL)
+            load_file(page->kaddr, vme);
+        else
+            swap_in(vme->sec_idx, page->kaddr);
         break;
     }
     default:

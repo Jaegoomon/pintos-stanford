@@ -1,6 +1,9 @@
 #include "vm/frame.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "vm/swap.h"
 
 void lru_list_init(void)
 {
@@ -29,7 +32,46 @@ struct page *alloc_page(enum palloc_flags flags)
     if (page == NULL)
         return NULL;
 
-    void *kaddr = palloc_get_page(flags);
+    void *kaddr;
+    do
+    {
+        kaddr = palloc_get_page(flags);
+        if (kaddr != NULL)
+            break;
+
+        struct page *victim = find_victim();
+        struct vm_entry *vme = victim->vme;
+        struct thread *t = victim->thread;
+        bool is_dirty = pagedir_is_dirty(t->pagedir, victim->vme->vaddr);
+
+        switch (vme->type)
+        {
+        case VM_BIN:
+        {
+            if (is_dirty)
+                vme->sec_idx = swap_out(victim->kaddr);
+            vme->type = VM_ANON;
+            break;
+        }
+        case VM_FILE:
+        {
+            if (is_dirty)
+                file_write_at(vme->file, victim->kaddr, PGSIZE, vme->offset);
+            break;
+        }
+        case VM_ANON:
+        {
+            vme->sec_idx = swap_out(victim->kaddr);
+            break;
+        }
+        default:
+            break;
+        }
+
+        lru_list_remove(victim);
+        free_page(victim);
+        pagedir_clear_page(t->pagedir, vme->vaddr);
+    } while (kaddr == NULL);
 
     page->kaddr = kaddr;
     page->thread = thread_current();

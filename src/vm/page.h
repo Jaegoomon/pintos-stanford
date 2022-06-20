@@ -3,6 +3,7 @@
 
 #include <hash.h>
 #include "filesys/file.h"
+#include "threads/thread.h"
 
 enum vm_type
 {
@@ -28,6 +29,7 @@ struct vm_entry
     struct file *file;
     bool writable;
     enum vm_type type;
+    size_t sec_idx;
 
     struct hash_elem elem;
     struct list_elem mmap_elem;
