@@ -28,6 +28,8 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -125,6 +127,12 @@ int main(void)
     locate_block_devices();
     filesys_init(format_filesys);
 #endif
+
+    /* Initialize LRU list */
+    lru_list_init();
+
+    // /* Initialize swap bitmap */
+    // init_swap_bitmap();
 
     printf("Boot complete.\n");
 

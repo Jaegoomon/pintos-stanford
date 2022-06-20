@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "vm/frame.h"
 
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux);
 static bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux);
@@ -101,16 +102,22 @@ void mmunmap_file(struct mmap_file *mmap_file)
 
             /* Delete vm_entry */
             vme = list_entry(e, struct vm_entry, mmap_elem);
-            bool success = delete_vme(&cur->vm, vme);
+            delete_vme(&cur->vm, vme);
 
-            /* Dirty checking */
-            bool is_dirty = pagedir_is_dirty(cur->pagedir, vme->vaddr);
             void *kaddr = pagedir_get_page(cur->pagedir, vme->vaddr);
-            if (is_dirty)
-                file_write_at(vme->file, kaddr, PGSIZE, vme->offset);
+            if (kaddr != NULL)
+            {
+                /* Dirty checking */
+                bool is_dirty = pagedir_is_dirty(cur->pagedir, vme->vaddr);
+                if (is_dirty)
+                    file_write_at(vme->file, kaddr, PGSIZE, vme->offset);
+
+                struct page *page = find_page(kaddr);
+                if (page != NULL)
+                    free_page(page);
+            }
 
             /* Clear page table entry */
-            palloc_free_page(kaddr);
             pagedir_clear_page(cur->pagedir, vme->vaddr);
             /* Free vm_entry */
             free(vme);

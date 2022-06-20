@@ -11,6 +11,14 @@ enum vm_type
     VM_ANON
 };
 
+struct page
+{
+    uint8_t *kaddr;
+    struct vm_entry *vme;
+    struct thread *thread;
+    struct list_elem lru;
+};
+
 struct vm_entry
 {
     uint8_t *vaddr;

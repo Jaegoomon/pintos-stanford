@@ -20,6 +20,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 struct arg
 {
@@ -490,21 +492,21 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack(void **esp)
 {
-    uint8_t *kpage;
     bool success = false;
 
-    kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-    if (kpage != NULL)
+    struct page *page = alloc_page(PAL_USER | PAL_ZERO);
+    if (page != NULL)
     {
-        success = install_page(((uint8_t *)PHYS_BASE) - PGSIZE, kpage, true);
+        success = install_page(((uint8_t *)PHYS_BASE) - PGSIZE, page->kaddr, true);
         if (success)
             *esp = PHYS_BASE;
         else
-            palloc_free_page(kpage);
+            free_page(page);
     }
 
     /* Create vm_entry */
     struct vm_entry *vme = malloc(sizeof(struct vm_entry));
+    page->vme = vme;
 
     /* Set up vm_entry members */
     vme->file = NULL;
@@ -619,24 +621,25 @@ bool handle_mm_fault(struct vm_entry *vme)
     if (vme == NULL || vme->file == NULL)
         return success;
 
-    /* Allocate physical memory. */
-    uint8_t *kpage = palloc_get_page(PAL_USER);
-    if (kpage == NULL)
+    /* Allocate page. */
+    struct page *page = alloc_page(PAL_USER);
+    if (page == NULL)
         return success;
 
+    page->vme = vme;
     switch (vme->type)
     {
     case VM_BIN:
     {
         /* Load file in the disk to physical memory. */
-        if (!load_file(kpage, vme))
+        if (!load_file(page->kaddr, vme))
             goto done;
         break;
     }
     case VM_FILE:
     {
         /* Load file in the disk to physical memory. */
-        if (!load_file(kpage, vme))
+        if (!load_file(page->kaddr, vme))
             goto done;
         break;
     }
@@ -645,11 +648,11 @@ bool handle_mm_fault(struct vm_entry *vme)
     }
 
     /* Update page table entry. */
-    success = install_page(vme->vaddr, kpage, vme->writable);
+    success = install_page(vme->vaddr, page->kaddr, vme->writable);
 
 done:
     if (!success)
-        palloc_free_page(kpage);
+        free_page(page);
 
     return success;
 }
