@@ -4,6 +4,13 @@
 #include <hash.h>
 #include "filesys/file.h"
 
+enum vm_type
+{
+    VM_BIN,
+    VM_FILE,
+    VM_ANON
+};
+
 struct vm_entry
 {
     uint8_t *vaddr;
@@ -12,8 +19,18 @@ struct vm_entry
     unsigned offset;
     struct file *file;
     bool writable;
+    enum vm_type type;
 
     struct hash_elem elem;
+    struct list_elem mmap_elem;
+};
+
+struct mmap_file
+{
+    int mapid;
+    struct file *file;
+    struct list_elem elem;
+    struct list vme_list;
 };
 
 void vm_init(struct hash *vm);

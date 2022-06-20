@@ -27,6 +27,7 @@ static int write(int fd, const void *buffer, unsigned size);
 static void seek(int fd, unsigned position);
 static unsigned tell(int fd);
 static void close(int fd);
+static int mmap(int fd, void *addr);
 
 void syscall_init(void)
 {
@@ -109,6 +110,11 @@ syscall_handler(struct intr_frame *f)
     case SYS_CLOSE: /* Close a file. */
     {
         close(*(uint32_t *)(esp + 4));
+        break;
+    }
+    case SYS_MMAP: /* Map a file into memory. */
+    {
+        f->eax = mmap(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
         break;
     }
     default:
@@ -283,4 +289,60 @@ static void close(int fd)
             cur->fdt[fd] = NULL;
         }
     }
+}
+
+static int mmap(int fd, void *addr)
+{
+    /* Null checking */
+    if (addr == NULL)
+        return -1;
+
+    is_valid_addr(addr);
+    if (fd < 0 || fd > 128)
+        return -1;
+
+    /* Disallow overlap */
+    if (find_vme(addr) != NULL)
+        return -1;
+
+    /* Check alignment */
+    if (pg_ofs(addr) != 0)
+        return -1;
+
+    struct thread *cur = thread_current();
+    struct file *file = cur->fdt[fd];
+    struct file *reopened_file = file_reopen(file);
+    int mapid = cur->next_fd++;
+    cur->fdt[mapid] = reopened_file;
+
+    struct mmap_file *mmap_file = malloc(sizeof(struct mmap_file));
+    mmap_file->mapid = mapid;
+    mmap_file->file = reopened_file;
+    list_push_front(&cur->mmap_list, &mmap_file->elem);
+    list_init(&mmap_file->vme_list);
+
+    uint32_t read_bytes = file_length(reopened_file);
+    while (read_bytes > 0)
+    {
+        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+        struct vm_entry *vme = malloc(sizeof(struct vm_entry));
+        list_push_back(&mmap_file->vme_list, &vme->mmap_elem);
+        vme->file = reopened_file;
+        vme->vaddr = addr;
+        vme->read_bytes = page_read_bytes;
+        vme->zero_bytes = page_zero_bytes;
+        vme->offset = reopened_file->pos;
+        vme->writable = true;
+        vme->type = VM_FILE;
+
+        file_seek(reopened_file, file_tell(reopened_file) + page_read_bytes);
+        bool success = insert_vme(&cur->vm, vme);
+
+        read_bytes -= page_read_bytes;
+        addr += PGSIZE;
+    }
+
+    return mmap_file->mapid;
 }

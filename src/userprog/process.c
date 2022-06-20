@@ -465,6 +465,7 @@ load_segment(struct file *file, off_t ofs, uint8_t *upage,
         vme->zero_bytes = page_zero_bytes;
         vme->offset = file->pos;
         vme->writable = writable;
+        vme->type = VM_BIN;
 
         file_seek(file, file_tell(file) + page_read_bytes);
 
@@ -509,6 +510,7 @@ setup_stack(void **esp)
     vme->zero_bytes = 0;
     vme->offset = 0;
     vme->writable = true;
+    vme->type = VM_ANON;
 
     /* Using insert_vme(), add vm_enty to hash table */
     struct thread *cur = thread_current();
@@ -619,9 +621,25 @@ bool handle_mm_fault(struct vm_entry *vme)
     if (kpage == NULL)
         return success;
 
-    /* Load file in the disk to physical memory. */
-    if (!load_file(kpage, vme))
-        goto done;
+    switch (vme->type)
+    {
+    case VM_BIN:
+    {
+        /* Load file in the disk to physical memory. */
+        if (!load_file(kpage, vme))
+            goto done;
+        break;
+    }
+    case VM_FILE:
+    {
+        /* Load file in the disk to physical memory. */
+        if (!load_file(kpage, vme))
+            goto done;
+        break;
+    }
+    default:
+        break;
+    }
 
     /* Update page table entry. */
     success = install_page(vme->vaddr, kpage, vme->writable);

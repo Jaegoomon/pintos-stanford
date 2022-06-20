@@ -114,6 +114,7 @@ struct thread
     int next_fd;
 
     struct hash vm;
+    struct list mmap_list;
 #endif
 
     /* Owned by thread.c. */
