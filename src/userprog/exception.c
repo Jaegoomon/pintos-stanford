@@ -163,10 +163,26 @@ page_fault(struct intr_frame *f)
         exit(-1);
     }
 
-    if (pagedir_get_page(cur->pagedir, fault_addr) == NULL)
+    struct vm_entry *vme = find_vme(fault_addr);
+    if (not_present)
     {
-        struct vm_entry *vme = find_vme(fault_addr);
-        if (!handle_mm_fault(vme))
+        if (vme != NULL)
+        {
+            if (!handle_mm_fault(vme))
+                exit(-1);
+        }
+        else
+        {
+            /* Check stack access */
+            if (fault_addr >= f->esp - 32)
+                expand_stack(fault_addr);
+            else
+                exit(-1);
+        }
+    }
+    else
+    {
+        if (write && !vme->writable)
             exit(-1);
     }
 }

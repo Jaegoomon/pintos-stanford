@@ -619,9 +619,6 @@ bool handle_mm_fault(struct vm_entry *vme)
 {
     bool success = false;
 
-    if (vme == NULL)
-        return success;
-
     /* Allocate page. */
     lock_acquire(&lru_list.lru_list_lock);
     struct page *page = alloc_page(PAL_USER);
@@ -654,7 +651,10 @@ bool handle_mm_fault(struct vm_entry *vme)
         break;
     }
     default:
+    {
+        return expand_stack(vme->vaddr);
         break;
+    }
     }
 
     /* Update page table entry. */
@@ -665,6 +665,44 @@ bool handle_mm_fault(struct vm_entry *vme)
 done:
     if (!success)
         free_page(page);
+
+    return success;
+}
+
+bool expand_stack(void *addr)
+{
+    bool success = false;
+    void *vaddr = pg_round_down(addr);
+    /* Check stack max size. */
+    if (vaddr < PHYS_BASE - MAX_STACK_SIZE)
+        return success;
+
+    struct page *page = alloc_page(PAL_USER | PAL_ZERO);
+    if (page != NULL)
+    {
+        success = install_page(vaddr, page->kaddr, true);
+        if (!success)
+            free_page(page);
+    }
+
+    /* Create vm_entry */
+    struct vm_entry *vme = malloc(sizeof(struct vm_entry));
+    page->vme = vme;
+
+    /* Set up vm_entry members */
+    vme->file = NULL;
+    vme->vaddr = vaddr;
+    vme->read_bytes = PGSIZE;
+    vme->zero_bytes = 0;
+    vme->offset = 0;
+    vme->writable = true;
+    vme->type = VM_ANON;
+    vme->sec_idx = -1;
+
+    /* Add vm_enty to hash table */
+    struct thread *cur = thread_current();
+    if (!insert_vme(&cur->vm, vme))
+        return false;
 
     return success;
 }
