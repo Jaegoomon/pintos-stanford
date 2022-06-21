@@ -14,16 +14,12 @@ void lru_list_init(void)
 
 void lru_list_push_back(struct page *page)
 {
-    lock_acquire(&lru_list.lru_list_lock);
     list_push_back(&lru_list.page_list, &page->lru);
-    lock_release(&lru_list.lru_list_lock);
 }
 
 void lru_list_remove(struct page *page)
 {
-    lock_acquire(&lru_list.lru_list_lock);
     list_remove(&page->lru);
-    lock_release(&lru_list.lru_list_lock);
 }
 
 struct page *alloc_page(enum palloc_flags flags)
@@ -68,7 +64,6 @@ struct page *alloc_page(enum palloc_flags flags)
             break;
         }
 
-        lru_list_remove(victim);
         free_page(victim);
         pagedir_clear_page(t->pagedir, vme->vaddr);
     } while (kaddr == NULL);

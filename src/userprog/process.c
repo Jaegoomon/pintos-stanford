@@ -162,9 +162,7 @@ void process_exit(void)
 
     // Free all files in FDT.
     for (i = 2; i < cur->next_fd; i++)
-    {
         file_close(cur->fdt[i]);
-    }
     free(cur->fdt);
 
     file_close(cur->executed_file);
@@ -625,6 +623,7 @@ bool handle_mm_fault(struct vm_entry *vme)
         return success;
 
     /* Allocate page. */
+    lock_acquire(&lru_list.lru_list_lock);
     struct page *page = alloc_page(PAL_USER);
     if (page == NULL)
         return success;
@@ -660,6 +659,8 @@ bool handle_mm_fault(struct vm_entry *vme)
 
     /* Update page table entry. */
     success = install_page(vme->vaddr, page->kaddr, vme->writable);
+    pagedir_set_accessed(page->thread->pagedir, page->vme->vaddr, true);
+    lock_release(&lru_list.lru_list_lock);
 
 done:
     if (!success)

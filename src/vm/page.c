@@ -17,7 +17,9 @@ void vm_init(struct hash *vm)
 
 void vm_destory(struct hash *vm)
 {
+    lock_acquire(&lru_list.lru_list_lock);
     hash_destroy(vm, vm_destroy_func);
+    lock_release(&lru_list.lru_list_lock);
 }
 
 struct vm_entry *find_vme(void *vaddr)
@@ -84,6 +86,16 @@ static bool vm_less_func(const struct hash_elem *a, const struct hash_elem *b, v
 static void vm_destroy_func(struct hash_elem *e, void *aux)
 {
     struct vm_entry *vme = hash_entry(e, struct vm_entry, elem);
+    void *kaddr = pagedir_get_page(thread_current()->pagedir, vme->vaddr);
+    if (kaddr != NULL)
+    {
+        struct page *page = find_page(kaddr);
+        if (page != NULL)
+        {
+            lru_list_remove(page);
+            free(page);
+        }
+    }
     free(vme);
 }
 
