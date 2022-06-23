@@ -27,6 +27,7 @@ static int write(int fd, const void *buffer, unsigned size);
 static void seek(int fd, unsigned position);
 static unsigned tell(int fd);
 static void close(int fd);
+static int mmap(int fd, void *addr);
 
 void syscall_init(void)
 {
@@ -39,7 +40,9 @@ syscall_handler(struct intr_frame *f)
 {
     // hex_dump(esp, esp, 0xc0000000 - esp, true);
     uint32_t esp = f->esp;
-    is_valid_addr(esp);
+    struct thread *cur = thread_current();
+    if (esp == NULL || esp >= PHYS_BASE || pagedir_get_page(cur->pagedir, esp) == NULL)
+        exit(-1);
 
     switch (*(uint32_t *)esp)
     {
@@ -109,15 +112,27 @@ syscall_handler(struct intr_frame *f)
         close(*(uint32_t *)(esp + 4));
         break;
     }
+    case SYS_MMAP: /* Map a file into memory. */
+    {
+        f->eax = mmap(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
+        break;
+    }
+    case SYS_MUNMAP: /* Remove a memory mapping. */
+    {
+        munmap(*(uint32_t *)(esp + 4));
+        break;
+    }
     default:
         break;
     }
+
+    unpin_page();
 }
 
 static void is_valid_addr(uint32_t *vaddr)
 {
     struct thread *cur = thread_current();
-    if (vaddr == NULL || vaddr >= PHYS_BASE || pagedir_get_page(cur->pagedir, vaddr) == NULL)
+    if (vaddr == NULL || vaddr >= PHYS_BASE)
         exit(-1);
 }
 
@@ -207,10 +222,11 @@ static int filesize(int fd)
 
 static int read(int fd, void *buffer, unsigned size)
 {
-    is_valid_addr(buffer);
-    int size_read = -1;
-
     lock_acquire(&filesys_lock);
+    unpin_page();
+
+    int size_read = -1;
+    check_valid_buffer(buffer, size);
 
     if (fd == 0)
         size_read = input_getc();
@@ -224,6 +240,7 @@ static int read(int fd, void *buffer, unsigned size)
         }
     }
 
+    unpin_page();
     lock_release(&filesys_lock);
 
     return size_read;
@@ -231,10 +248,11 @@ static int read(int fd, void *buffer, unsigned size)
 
 static int write(int fd, const void *buffer, unsigned size)
 {
-    is_valid_addr(buffer);
-    int size_written = -1;
-
     lock_acquire(&filesys_lock);
+    unpin_page();
+
+    int size_written = -1;
+    check_valid_buffer(buffer, size);
 
     if (fd == 1)
         putbuf(buffer, size);
@@ -248,6 +266,7 @@ static int write(int fd, const void *buffer, unsigned size)
         }
     }
 
+    unpin_page();
     lock_release(&filesys_lock);
 
     return size_written;
@@ -279,6 +298,88 @@ static void close(int fd)
             struct file *file = cur->fdt[fd];
             file_close(file);
             cur->fdt[fd] = NULL;
+        }
+    }
+}
+
+static int mmap(int fd, void *addr)
+{
+    /* Null checking */
+    if (addr == NULL)
+        return -1;
+
+    is_valid_addr(addr);
+    if (fd < 0 || fd > 128)
+        return -1;
+
+    /* Disallow overlap */
+    if (find_vme(addr) != NULL)
+        return -1;
+
+    /* Check alignment */
+    if (pg_ofs(addr) != 0)
+        return -1;
+
+    struct thread *cur = thread_current();
+    struct file *file = cur->fdt[fd];
+    struct file *reopened_file = file_reopen(file);
+    int mapid = cur->next_fd++;
+    cur->fdt[mapid] = reopened_file;
+
+    struct mmap_file *mmap_file = malloc(sizeof(struct mmap_file));
+    mmap_file->mapid = mapid;
+    mmap_file->file = reopened_file;
+    list_push_front(&cur->mmap_list, &mmap_file->elem);
+    list_init(&mmap_file->vme_list);
+
+    uint32_t read_bytes = file_length(reopened_file);
+    while (read_bytes > 0)
+    {
+        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+        struct vm_entry *vme = malloc(sizeof(struct vm_entry));
+        list_push_back(&mmap_file->vme_list, &vme->mmap_elem);
+        vme->file = reopened_file;
+        vme->vaddr = addr;
+        vme->read_bytes = page_read_bytes;
+        vme->zero_bytes = page_zero_bytes;
+        vme->offset = reopened_file->pos;
+        vme->writable = true;
+        vme->type = VM_FILE;
+
+        file_seek(reopened_file, file_tell(reopened_file) + page_read_bytes);
+        bool success = insert_vme(&cur->vm, vme);
+
+        read_bytes -= page_read_bytes;
+        addr += PGSIZE;
+    }
+
+    return mmap_file->mapid;
+}
+
+void munmap(int mapid)
+{
+    struct list *mmap_list = &thread_current()->mmap_list;
+
+    if (!list_empty(mmap_list))
+    {
+        struct mmap_file *mf;
+        struct list_elem *e = list_begin(mmap_list);
+        while (e != list_end(mmap_list))
+        {
+            struct list_elem *next = list_next(e);
+
+            mf = list_entry(e, struct mmap_file, elem);
+            if (mf->mapid == mapid || mapid == INT32_MAX)
+            {
+                mmunmap_file(mf);
+                list_remove(e);
+                free(mf);
+                close(mapid);
+            }
+
+            e = next;
         }
     }
 }

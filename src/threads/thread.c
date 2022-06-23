@@ -578,6 +578,8 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
     {
         list_push_back(&parent->child_list, &t->child_elem);
     }
+
+    list_init(&t->mmap_list);
 #endif
 }
 

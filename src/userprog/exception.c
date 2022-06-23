@@ -2,8 +2,11 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include "userprog/gdt.h"
+#include "userprog/pagedir.h"
+#include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "threads/interrupt.h"
+#include "threads/vaddr.h"
 #include "threads/thread.h"
 
 /* Number of page faults processed. */
@@ -152,7 +155,41 @@ page_fault(struct intr_frame *f)
        body, and replace it with code that brings in the page to
        which fault_addr refers. */
 
-    f->eip = f->eax;
-    f->eax = 0xffffffff;
-    exit(-1);
+    struct thread *cur = thread_current();
+    if (fault_addr == NULL || fault_addr >= PHYS_BASE)
+    {
+        f->eip = f->eax;
+        f->eax = 0xffffffff;
+        exit(-1);
+    }
+
+    struct vm_entry *vme = find_vme(fault_addr);
+    if (not_present)
+    {
+        if (vme != NULL)
+        {
+            if (!handle_mm_fault(vme))
+                exit(-1);
+        }
+        else
+        {
+            /* Check stack access */
+            if (fault_addr >= f->esp - 32)
+            {
+                while (fault_addr < PHYS_BASE)
+                {
+                    if (find_vme(fault_addr) == NULL)
+                        expand_stack(fault_addr);
+                    fault_addr += PGSIZE;
+                }
+            }
+            else
+                exit(-1);
+        }
+    }
+    else
+    {
+        if (write && !vme->writable)
+            exit(-1);
+    }
 }
