@@ -175,7 +175,14 @@ page_fault(struct intr_frame *f)
         {
             /* Check stack access */
             if (fault_addr >= f->esp - 32)
-                expand_stack(fault_addr);
+            {
+                while (fault_addr < PHYS_BASE)
+                {
+                    if (find_vme(fault_addr) == NULL)
+                        expand_stack(fault_addr);
+                    fault_addr += PGSIZE;
+                }
+            }
             else
                 exit(-1);
         }

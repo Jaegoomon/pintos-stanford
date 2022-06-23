@@ -671,6 +671,8 @@ done:
 
 bool expand_stack(void *addr)
 {
+    lock_acquire(&lru_list.lru_list_lock);
+
     bool success = false;
     void *vaddr = pg_round_down(addr);
     /* Check stack max size. */
@@ -703,6 +705,8 @@ bool expand_stack(void *addr)
     struct thread *cur = thread_current();
     if (!insert_vme(&cur->vm, vme))
         return false;
+
+    lock_release(&lru_list.lru_list_lock);
 
     return success;
 }
