@@ -18,6 +18,7 @@ struct page
     struct vm_entry *vme;
     struct thread *thread;
     struct list_elem lru;
+    bool pinned;
 };
 
 struct vm_entry
@@ -49,6 +50,9 @@ struct vm_entry *find_vme(void *vaddr);
 bool insert_vme(struct hash *vm, struct vm_entry *vme);
 bool delete_vme(struct hash *vm, struct vm_entry *vme);
 bool load_file(void *kpage, struct vm_entry *vme);
+struct vm_entry *check_address(void *vaddr);
+void check_valid_buffer(void *buffer, unsigned size);
 void mmunmap_file(struct mmap_file *mmap_file);
+void unpin_page(void);
 
 #endif

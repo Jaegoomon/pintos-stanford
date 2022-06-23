@@ -4,6 +4,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
 #include "vm/frame.h"
 
 static unsigned vm_hash_func(const struct hash_elem *e, void *aux);
@@ -97,6 +98,71 @@ static void vm_destroy_func(struct hash_elem *e, void *aux)
         }
     }
     free(vme);
+}
+
+struct vm_entry *check_address(void *vaddr)
+{
+    if (vaddr == NULL || vaddr >= PHYS_BASE)
+        exit(-1);
+
+    return find_vme(vaddr);
+}
+
+void check_valid_buffer(void *buffer, unsigned size)
+{
+    size_t read_bytes = pg_ofs(buffer) != 0 && pg_no(buffer) != pg_no(buffer + size) ? size + 1 : size;
+    while (read_bytes > 0)
+    {
+        size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        struct vm_entry *vme = check_address(buffer);
+
+        if (vme == NULL)
+            exit(-1);
+        else
+        {
+            void *kaddr = pagedir_get_page(thread_current()->pagedir, vme->vaddr);
+            if (kaddr == NULL)
+            {
+                bool a = handle_mm_fault(vme);
+                kaddr = pagedir_get_page(thread_current()->pagedir, vme->vaddr);
+            }
+
+            struct page *page = find_page(kaddr);
+            page->pinned = true;
+        }
+
+        read_bytes -= page_read_bytes;
+        buffer += PGSIZE;
+    }
+}
+
+void pin_page()
+{
+    struct thread *cur = thread_current();
+
+    lock_acquire(&lru_list.lru_list_lock);
+    struct page *p;
+    struct list_elem *e;
+    for (e = list_begin(&lru_list.page_list); e != list_end(&lru_list.page_list); e = list_next(e))
+    {
+        p = list_entry(e, struct page, lru);
+        if (p->thread = cur && pagedir_is_accessed(p->thread->pagedir, p->vme->vaddr))
+            p->pinned = true;
+    }
+    lock_release(&lru_list.lru_list_lock);
+}
+
+void unpin_page()
+{
+    lock_acquire(&lru_list.lru_list_lock);
+    struct page *p;
+    struct list_elem *e;
+    for (e = list_begin(&lru_list.page_list); e != list_end(&lru_list.page_list); e = list_next(e))
+    {
+        p = list_entry(e, struct page, lru);
+        p->pinned = false;
+    }
+    lock_release(&lru_list.lru_list_lock);
 }
 
 void mmunmap_file(struct mmap_file *mmap_file)

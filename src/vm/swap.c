@@ -20,15 +20,16 @@ struct page *find_victim()
         p = list_entry(clock, struct page, lru);
         bool is_accessed = pagedir_is_accessed(p->thread->pagedir, p->vme->vaddr);
         if (is_accessed)
-        {
             pagedir_set_accessed(p->thread->pagedir, p->vme->vaddr, !is_accessed);
-            clock = list_next(clock);
-        }
         else
         {
-            lru_list.lru_clock = list_next(clock);
-            return p;
+            if (!p->pinned)
+            {
+                lru_list.lru_clock = list_next(clock);
+                return p;
+            }
         }
+        clock = list_next(clock);
     }
 }
 

@@ -125,6 +125,8 @@ syscall_handler(struct intr_frame *f)
     default:
         break;
     }
+
+    unpin_page();
 }
 
 static void is_valid_addr(uint32_t *vaddr)
@@ -220,10 +222,11 @@ static int filesize(int fd)
 
 static int read(int fd, void *buffer, unsigned size)
 {
-    is_valid_addr(buffer);
-    int size_read = -1;
-
     lock_acquire(&filesys_lock);
+    unpin_page();
+
+    int size_read = -1;
+    check_valid_buffer(buffer, size);
 
     if (fd == 0)
         size_read = input_getc();
@@ -237,6 +240,7 @@ static int read(int fd, void *buffer, unsigned size)
         }
     }
 
+    unpin_page();
     lock_release(&filesys_lock);
 
     return size_read;
@@ -244,10 +248,11 @@ static int read(int fd, void *buffer, unsigned size)
 
 static int write(int fd, const void *buffer, unsigned size)
 {
-    is_valid_addr(buffer);
-    int size_written = -1;
-
     lock_acquire(&filesys_lock);
+    unpin_page();
+
+    int size_written = -1;
+    check_valid_buffer(buffer, size);
 
     if (fd == 1)
         putbuf(buffer, size);
@@ -261,6 +266,7 @@ static int write(int fd, const void *buffer, unsigned size)
         }
     }
 
+    unpin_page();
     lock_release(&filesys_lock);
 
     return size_written;

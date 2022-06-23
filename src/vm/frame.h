@@ -19,6 +19,7 @@ void lru_list_push_back(struct page *page);
 void lru_list_remove(struct page *page);
 
 struct page *alloc_page(enum palloc_flags flags);
+struct page *find_page(void *kaddr);
 void free_page(struct page *page);
 
 #endif

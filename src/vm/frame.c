@@ -70,6 +70,7 @@ struct page *alloc_page(enum palloc_flags flags)
 
     page->kaddr = kaddr;
     page->thread = thread_current();
+    page->pinned = false;
     lru_list_push_back(page);
 
     return page;
