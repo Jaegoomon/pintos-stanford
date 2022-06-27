@@ -5,6 +5,7 @@
 #include "filesys/file.h"
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
+#include "filesys/cache.h"
 #include "filesys/directory.h"
 
 /* Partition that contains the file system. */
@@ -23,6 +24,9 @@ void filesys_init(bool format)
     inode_init();
     free_map_init();
 
+    /* Allocate and initialize buffer cache. */
+    bc_init();
+
     if (format)
         do_format();
 
@@ -34,6 +38,9 @@ void filesys_init(bool format)
 void filesys_done(void)
 {
     free_map_close();
+
+    /* Destroy buffer cache */
+    bc_free();
 }
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
