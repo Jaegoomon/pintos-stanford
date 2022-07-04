@@ -376,7 +376,7 @@ void munmap(int mapid)
                 mmunmap_file(mf);
                 list_remove(e);
                 free(mf);
-                close(mapid);
+                close(mf->mapid);
             }
 
             e = next;
