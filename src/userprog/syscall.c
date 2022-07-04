@@ -10,7 +10,9 @@
 #include "userprog/process.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
+#include "filesys/directory.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 
 static void syscall_handler(struct intr_frame *);
 static void is_valid_addr(uint32_t *vaddr);
@@ -28,6 +30,11 @@ static void seek(int fd, unsigned position);
 static unsigned tell(int fd);
 static void close(int fd);
 static int mmap(int fd, void *addr);
+static bool chdir(const char *dir);
+static bool mkdir(const char *dir);
+static bool readdir(int fd, char *name);
+static bool isdir(int fd);
+static int inumber(int fd);
 
 void syscall_init(void)
 {
@@ -120,6 +127,31 @@ syscall_handler(struct intr_frame *f)
     case SYS_MUNMAP: /* Remove a memory mapping. */
     {
         munmap(*(uint32_t *)(esp + 4));
+        break;
+    }
+    case SYS_CHDIR: /* Change the current directory. */
+    {
+        f->eax = chdir(*(uint32_t *)(esp + 4));
+        break;
+    }
+    case SYS_MKDIR: /* Create a directory. */
+    {
+        f->eax = mkdir(*(uint32_t *)(esp + 4));
+        break;
+    }
+    case SYS_READDIR: /* Reads a directory entry. */
+    {
+        f->eax = readdir(*(uint32_t *)(esp + 16), *(uint32_t *)(esp + 20));
+        break;
+    }
+    case SYS_ISDIR: /* Tests if a fd represents a directory. */
+    {
+        f->eax = isdir(*(uint32_t *)(esp + 4));
+        break;
+    }
+    case SYS_INUMBER: /* Returns the inode number for a fd. */
+    {
+        f->eax = inumber(*(uint32_t *)(esp + 4));
         break;
     }
     default:
@@ -262,6 +294,9 @@ static int write(int fd, const void *buffer, unsigned size)
         if (fd > 0 && fd < cur->next_fd)
         {
             struct file *file = cur->fdt[fd];
+            if (inode_is_dir(file->inode))
+                exit(-1);
+
             size_written = file_write(file, buffer, size);
         }
     }
@@ -382,4 +417,83 @@ void munmap(int mapid)
             e = next;
         }
     }
+}
+
+static bool chdir(const char *dir)
+{
+    is_valid_addr(dir);
+
+    bool success = false;
+    struct inode *inode = NULL;
+    struct thread *cur = thread_current();
+
+    char *file_name = malloc(NAME_MAX + 1);
+    struct dir *dir_ = parse_path(dir, file_name);
+
+    if (dir_ != NULL)
+    {
+        if (strlen(file_name) != 0)
+            dir_lookup(dir_, file_name, &inode);
+        else if (is_root_dir(dir_))
+            inode = inode_open(ROOT_DIR_SECTOR);
+
+        success = inode != NULL && inode_is_dir(inode);
+    }
+
+    if (success)
+    {
+        dir_close(cur->cur_dir);
+        cur->cur_dir = dir_open(inode);
+    }
+    free(file_name);
+    dir_close(dir_);
+
+    return success;
+}
+
+static bool mkdir(const char *dir)
+{
+    is_valid_addr(dir);
+    return filesys_create_dir(dir);
+}
+
+static bool readdir(int fd, char *name)
+{
+    struct thread *cur = thread_current();
+    if (fd > 0 && fd < cur->next_fd)
+    {
+        bool success = false;
+
+        struct file *file = cur->fdt[fd];
+        if (file->dir != NULL)
+            success = dir_has_child(file->dir, name);
+
+        return success;
+    }
+    else
+        exit(-1);
+}
+
+static bool isdir(int fd)
+{
+    struct thread *cur = thread_current();
+    if (fd > 0 && fd < cur->next_fd)
+    {
+        struct file *file = cur->fdt[fd];
+        return inode_is_dir(file->inode);
+    }
+    else
+        exit(-1);
+}
+
+static int inumber(int fd)
+{
+    struct thread *cur = thread_current();
+    if (fd > 0 && fd < cur->next_fd)
+    {
+        struct file *file = cur->fdt[fd];
+        return inode_get_inumber(file->inode);
+    }
+    else
+        exit(-1);
 }

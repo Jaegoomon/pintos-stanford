@@ -556,3 +556,15 @@ static void free_inode_sectors(struct inode_disk *inode_disk)
         free_map_release(inode_disk->double_indirect_block_sec, 1);
     }
 }
+
+bool inode_is_dir(const struct inode *inode)
+{
+    uint32_t is_dir;
+
+    struct inode_disk *disk_inode = malloc(BLOCK_SECTOR_SIZE);
+    get_disk_inode(inode, disk_inode);
+    is_dir = disk_inode->is_dir;
+    free(disk_inode);
+
+    return (bool)is_dir;
+}

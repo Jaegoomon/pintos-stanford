@@ -221,3 +221,22 @@ bool dir_readdir(struct dir *dir, char name[NAME_MAX + 1])
     }
     return false;
 }
+
+bool dir_has_child(struct dir *dir, char name[NAME_MAX + 1])
+{
+    bool result = false;
+
+    do
+    {
+        result = dir_readdir(dir, name);
+        if (!result)
+            break;
+    } while (strcmp(name, ".") == 0 || strcmp(name, "..") == 0);
+
+    return result;
+}
+
+bool is_root_dir(struct dir *dir)
+{
+    return dir->inode->sector == ROOT_DIR_SECTOR;
+}
