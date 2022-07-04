@@ -4,6 +4,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "devices/block.h"
+#include "filesys/off_t.h"
+
+/* A directory. */
+struct dir
+{
+    struct inode *inode; /* Backing store. */
+    off_t pos;           /* Current position. */
+};
 
 /* Maximum length of a file name component.
    This is the traditional UNIX maximum length.

@@ -4,6 +4,7 @@
 #include <round.h>
 #include <string.h>
 #include "filesys/cache.h"
+#include "filesys/directory.h"
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
@@ -121,7 +122,7 @@ void inode_init(void)
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length)
+bool inode_create(block_sector_t sector, off_t length, bool is_dir)
 {
     struct inode_disk *disk_inode = NULL;
     bool success = false;
@@ -137,6 +138,7 @@ bool inode_create(block_sector_t sector, off_t length)
     {
         disk_inode->length = 0;
         disk_inode->magic = INODE_MAGIC;
+        disk_inode->is_dir = is_dir;
         for (int i = 0; i < DIRECT_BLOCK_ENTRIES; i++)
             disk_inode->direct_map_table[i] = 0;
         disk_inode->indirect_block_sec = 0;

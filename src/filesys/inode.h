@@ -7,6 +7,9 @@
 #include "devices/block.h"
 #include "threads/synch.h"
 
+#define FILE 0
+#define DIRECTORY 1
+
 #define INDIRECT_BLOCK_ENTRIES 128
 #define DIRECT_BLOCK_ENTRIES 123
 
@@ -36,7 +39,7 @@ struct inode
 };
 
 void inode_init(void);
-bool inode_create(block_sector_t, off_t);
+bool inode_create(block_sector_t, off_t, bool);
 struct inode *inode_open(block_sector_t);
 struct inode *inode_reopen(struct inode *);
 block_sector_t inode_get_inumber(const struct inode *);
