@@ -161,7 +161,7 @@ void process_exit(void)
     }
 
     // Free all files in FDT.
-    for (i = 2; i < cur->next_fd; i++)
+    for (i = 2; i < 128; i++)
         file_close(cur->fdt[i]);
     free(cur->fdt);
 

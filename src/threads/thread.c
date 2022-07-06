@@ -195,6 +195,8 @@ tid_t thread_create(const char *name, int priority,
 
 #ifdef USERPROG
     t->fdt = malloc(sizeof(struct file *) * 128);
+    for (int i = 0; i < 128; i++)
+        t->fdt[i] = NULL;
     t->next_fd = 2;
 #endif
 

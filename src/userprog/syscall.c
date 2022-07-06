@@ -237,12 +237,30 @@ static int open(const char *file)
 
     struct thread *cur = thread_current();
     struct file *opend_file = filesys_open(file);
+
     int fd = (opend_file == NULL) ? -1 : cur->next_fd++;
 
-    if (fd != -1)
+    if (fd == -1)
+        return -1;
+    else if (fd >= 2 && fd < 128)
+    {
         cur->fdt[fd] = opend_file;
+        return fd;
+    }
+    else
+    {
+        /* if next_fd is greather than 128 */
+        for (int i = 2; i < 128; i++)
+        {
+            if (cur->fdt[i] == NULL)
+            {
+                cur->fdt[i] = opend_file;
+                return i;
+            }
+        }
+    }
 
-    return fd;
+    return -1;
 }
 
 static int filesize(int fd)
