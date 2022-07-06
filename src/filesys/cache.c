@@ -29,15 +29,15 @@ void bc_init(void)
 
 void bc_free(void)
 {
-    /* Destroy buffer_cache. */
-    free(buffer_cache);
-
     /* Destroy buffer_head. */
     for (int i = 0; i < BUFFER_CACHE_ENTRY_SIZE; i++)
     {
         bc_flush(buffer_haed[i]);
         free(buffer_haed[i]);
     }
+
+    /* Destroy buffer_cache. */
+    free(buffer_cache);
 }
 
 void bc_read(block_sector_t sector_idx, void *buffer, off_t bytes_read, int chunk_size, int sector_ofs)
