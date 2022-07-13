@@ -2,6 +2,7 @@
 #define FILESYS_FILE_H
 
 #include <stdbool.h>
+#include "filesys/directory.h"
 #include "filesys/off_t.h"
 
 struct inode;
@@ -10,8 +11,9 @@ struct inode;
 struct file
 {
     struct inode *inode; /* File's inode. */
-    off_t pos;           /* Current position. */
-    bool deny_write;     /* Has file_deny_write() been called? */
+    struct dir *dir;
+    off_t pos;       /* Current position. */
+    bool deny_write; /* Has file_deny_write() been called? */
 };
 
 /* Opening and closing files. */

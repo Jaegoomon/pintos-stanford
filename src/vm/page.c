@@ -188,7 +188,7 @@ void mmunmap_file(struct mmap_file *mmap_file)
                 /* Dirty checking */
                 bool is_dirty = pagedir_is_dirty(cur->pagedir, vme->vaddr);
                 if (is_dirty)
-                    file_write_at(vme->file, kaddr, PGSIZE, vme->offset);
+                    file_write_at(vme->file, kaddr, vme->read_bytes, vme->offset);
 
                 struct page *page = find_page(kaddr);
                 if (page != NULL)

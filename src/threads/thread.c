@@ -15,6 +15,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "filesys/file.h"
+#include "filesys/inode.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -189,9 +190,13 @@ tid_t thread_create(const char *name, int priority,
     /* Initialize thread. */
     init_thread(t, name, priority, thread_current());
     tid = t->tid = allocate_tid();
+    if (thread_current()->cur_dir != NULL)
+        t->cur_dir = dir_reopen(thread_current()->cur_dir);
 
 #ifdef USERPROG
-    t->fdt = malloc(sizeof(struct file) * 128);
+    t->fdt = malloc(sizeof(struct file *) * 128);
+    for (int i = 0; i < 128; i++)
+        t->fdt[i] = NULL;
     t->next_fd = 2;
 #endif
 
@@ -322,6 +327,9 @@ void thread_exit(int status)
         sema_up(&cur->wait_sema);
     }
 #endif
+
+    /* Free current directory. */
+    dir_close(cur->cur_dir);
 
     /* Remove thread from all threads list, set our status to dying,
        and schedule another process.  That process will destroy us
@@ -574,10 +582,9 @@ init_thread(struct thread *t, const char *name, int priority, struct thread *par
 
     t->executed_file = NULL;
 
+    t->cur_dir = NULL;
     if (parent != NULL)
-    {
         list_push_back(&parent->child_list, &t->child_elem);
-    }
 
     list_init(&t->mmap_list);
 #endif

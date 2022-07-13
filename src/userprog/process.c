@@ -143,6 +143,9 @@ void process_exit(void)
     /* Delete vm_entries */
     vm_destory(&cur->vm);
 
+    /* Free pages thread has */
+    free_thread_pages(cur);
+
     /* Destroy the current process's page directory and switch back
        to the kernel-only page directory. */
     pd = cur->pagedir;
@@ -161,7 +164,7 @@ void process_exit(void)
     }
 
     // Free all files in FDT.
-    for (i = 2; i < cur->next_fd; i++)
+    for (i = 2; i < 128; i++)
         file_close(cur->fdt[i]);
     free(cur->fdt);
 

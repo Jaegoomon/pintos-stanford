@@ -6,13 +6,6 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* A directory. */
-struct dir
-{
-    struct inode *inode; /* Backing store. */
-    off_t pos;           /* Current position. */
-};
-
 /* A single directory entry. */
 struct dir_entry
 {
@@ -25,7 +18,7 @@ struct dir_entry
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt)
 {
-    return inode_create(sector, entry_cnt * sizeof(struct dir_entry));
+    return inode_create(sector, entry_cnt * sizeof(struct dir_entry), DIRECTORY);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -227,4 +220,23 @@ bool dir_readdir(struct dir *dir, char name[NAME_MAX + 1])
         }
     }
     return false;
+}
+
+bool dir_has_child(struct dir *dir, char name[NAME_MAX + 1])
+{
+    bool result = false;
+
+    do
+    {
+        result = dir_readdir(dir, name);
+        if (!result)
+            break;
+    } while (strcmp(name, ".") == 0 || strcmp(name, "..") == 0);
+
+    return result;
+}
+
+bool is_root_dir(struct dir *dir)
+{
+    return dir->inode->sector == ROOT_DIR_SECTOR;
 }

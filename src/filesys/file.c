@@ -12,6 +12,10 @@ file_open(struct inode *inode)
     struct file *file = calloc(1, sizeof *file);
     if (inode != NULL && file != NULL)
     {
+        if (inode_is_dir(inode))
+            file->dir = dir_open(inode);
+        else
+            file->dir = NULL;
         file->inode = inode;
         file->pos = 0;
         file->deny_write = false;
@@ -39,7 +43,10 @@ void file_close(struct file *file)
     if (file != NULL)
     {
         file_allow_write(file);
-        inode_close(file->inode);
+        if (file->dir != NULL)
+            dir_close(file->dir);
+        else
+            inode_close(file->inode);
         free(file);
     }
 }

@@ -98,3 +98,18 @@ void free_page(struct page *page)
     palloc_free_page(page->kaddr);
     free(page);
 }
+
+void free_thread_pages(struct thread *t)
+{
+    struct page *p;
+    struct list_elem *e = list_begin(&lru_list.page_list);
+    while (e != list_end(&lru_list.page_list))
+    {
+        struct list_elem *tmp = list_next(e);
+        p = list_entry(e, struct page, lru);
+        if (p->thread == t)
+            free_page(p);
+
+        e = tmp;
+    }
+}
